@@ -69,7 +69,7 @@ module tt_um_raybello_serdesphy_top (
     // Configuration
     .test_mode  (ui_in[7]),     // Test mode enable
     .lpbk_en    (uio_in[6]),    // Analog loopback enable
-    .dbg_an     (uio_out[7])    // Analog debug buffer
+    .dbg_ana     (uio_out[7])    // Analog debug buffer
   );
 
 
