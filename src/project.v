@@ -16,10 +16,62 @@ module tt_um_raybello_serdesphy_top (
     input  wire       rst_n     // reset_n - low to reset
 );
 
-  // All output pins must be assigned. If not used, assign to 0.
-  assign uo_out  = ui_in + uio_in;  // Example: ou_out is the sum of ui_in and uio_in
-  assign uio_out = 0;
-  assign uio_oe  = 0;
+  // Internal wires for bidirectional signals
+  wire sda_internal;
+  
+  // Open-drain SDA implementation
+  assign sda_internal = (uio_oe[0]) ? uio_out[0] : 1'bz;
+  assign uio_out[0]   = 1'b0;  // Drive low when output enabled
+  assign uio_oe[0]    = 1'b0;   // SDA is input by default (open-drain)
+  
+  // Configure bidirectional pin directions
+  // Outputs: TXP, TXN, DBG_ANA
+  assign uio_oe[2] = 1'b1;   // TXP is output
+  assign uio_oe[3] = 1'b1;   // TXN is output  
+  assign uio_oe[7] = 1'b1;   // DBG_ANA is output
+  
+  // Inputs: SCL, RXP, RXN, LPBK_EN
+  assign uio_oe[1] = 1'b0;   // SCL is input
+  assign uio_oe[4] = 1'b0;   // RXP is input
+  assign uio_oe[5] = 1'b0;   // RXN is input
+  assign uio_oe[6] = 1'b0;   // LPBK_EN is input
+  
+  // Set unused bidirectional outputs to 0
+  assign uio_out[1] = 1'b0;  // SCL (input)
+  assign uio_out[4] = 1'b0;  // RXP (input)
+  assign uio_out[5] = 1'b0;  // RXN (input)
+  assign uio_out[6] = 1'b0;  // LPBK_EN (input)
+
+  serdesphy_top u_top(
+    // Reset & Clock
+    .clk_ref_24m(ui_in[0]),     // 24 MHz reference clock
+    .rst_n      (ui_in[1]),     // Active-low reset
+    .pll_lock   (uo_out[4]),    // PLL lock indicator
+    
+    // CSR Interface  
+    .sda        (sda_internal), // I²C data (open-drain)
+    .scl        (uio_in[1]),    // I²C clock (input)
+    
+    // Transmit
+    .tx_data    (ui_in[5:2]),   // TX data bits [3:0]
+    .tx_valid   (ui_in[6]),     // TX data valid strobe
+    .txp        (uio_out[2]),   // TX differential (+)
+    .txn        (uio_out[3]),   // TX differential (-)
+    
+    // Receive
+    .rx_data    (uo_out[3:0]),  // RX data bits [3:0]
+    .rx_valid   (uo_out[7]),    // RX data valid strobe
+    .cdr_lock   (uo_out[5]),    // CDR lock indicator
+    .prbs_err   (uo_out[6]),    // PRBS error flag
+    .rxp        (uio_in[4]),    // RX differential (+)
+    .rxn        (uio_in[5]),    // RX differential (-)
+    
+    // Configuration
+    .test_mode  (ui_in[7]),     // Test mode enable
+    .lpbk_en    (uio_in[6]),    // Analog loopback enable
+    .dbg_an     (uio_out[7])    // Analog debug buffer
+  );
+
 
   // List all unused inputs to prevent warnings
   wire _unused = &{ena, clk, rst_n, 1'b0};

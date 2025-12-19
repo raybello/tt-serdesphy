@@ -23,9 +23,6 @@ module tb ();
   wire [7:0] uio_out;
   wire [7:0] uio_oe;
 
-  wire out1, out2;
-
-  // Replace tt_um_raybello_serdesphy with your module name:
   tt_um_raybello_serdesphy_top user_project (
       .ui_in  (ui_in),    // Dedicated inputs
       .uo_out (uo_out),   // Dedicated outputs
@@ -37,7 +34,6 @@ module tb ();
       .rst_n  (rst_n)     // not reset
   );
 
-  top uut(clk, out1, out2);
 
 
 endmodule

@@ -60,7 +60,7 @@ The SKY130 SerDes PHY is a single-lane serial transceiver implementing Mancheste
 | OUT4 | PLL_LOCK | PLL lock indicator | CMOS |
 | OUT5 | CDR_LOCK | CDR lock indicator | CMOS |
 | OUT6 | PRBS_ERR | PRBS error flag | CMOS |
-| OUT7 | FIFO_ERR | FIFO error flag | CMOS |
+| OUT7 | RX_VALID | RX data valid strobe | CMOS |
 
 **BIDIRECTIONAL (8):**
 
@@ -144,7 +144,7 @@ The receive path recovers 240 Mbps differential signal and presents 4-bit parall
 3. **Deserializer:** 16-bit shift register at 240 MHz recovered clock
 4. **Manchester Decoder:** Biphase to 8-bit parallel conversion
 5. **RX FIFO:** 8-deep × 8-bit buffer with clock domain crossing
-6. **Word Disassembler:** 8-bit to dual 4-bit output over two cycles
+6. **Word Disassembler:** 8-bit to dual 4- babit output over two cycles
 
 **CDR Specifications:**
 

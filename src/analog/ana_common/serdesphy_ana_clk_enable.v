@@ -1,4 +1,4 @@
-module clk_enable(
+module serdesphy_ana_clk_enable(
   input clk,
   output CE  //clock enable 
 );

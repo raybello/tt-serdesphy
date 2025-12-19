@@ -18,39 +18,78 @@ project:
   # Don't forget to also update `PROJECT_SOURCES` in test/Makefile.
   source_files:
     - "project.v"
+    - "digital/top/serdesphy_top.v"
+    # - "digital/tx/serdesphy_tx_top.v"
+    # - "digital/tx/serdesphy_tx_fifo.v"
+    # - "digital/tx/serdesphy_tx_data_mux.v"
+    # - "digital/tx/serdesphy_word_assembler.v"
+    # - "digital/tx/serdesphy_manchester_encoder.v"
+    # - "digital/tx/serdesphy_prbs_generator.v"
+    # - "digital/tx/serdesphy_serializer_if.v"
+    # - "digital/rx/serdesphy_rx_top.v"
+    # - "digital/rx/serdesphy_rx_fifo.v"
+    # - "digital/rx/serdesphy_word_disassembler.v"
+    # - "digital/rx/serdesphy_manchester_decoder.v"
+    # - "digital/rx/serdesphy_prbs_checker.v"
+    # - "digital/rx/serdesphy_deserializer_if.v"
+    # - "digital/pll/serdesphy_pll_ctrl.v"
+    # - "digital/pll/serdesphy_clock_manager.v"
+    # - "digital/csr/serdesphy_csr_top.v"
+    # - "digital/csr/serdesphy_csr_registers.v"
+    # - "digital/csr/serdesphy_i2c_slave.v"
+    # - "digital/csr/serdesphy_debug_mux.v"
+    # - "digital/por/serdesphy_por.v"
+    # - "digital/common/serdesphy_reset_synchronizer.v"
+    # - "digital/common/serdesphy_reset_synchronizer.v"
+    # - "analog/ana_common/serdesphy_analog_debug_buffer.v"
+    # - "analog/ana_common/serdesphy_bias_generator.v"
+    # - "analog/ana_common/serdesphy_clk_enable.v"
+    # - "analog/ana_pll/serdesphy_frequency_divider.v"
+    # - "analog/ana_pll/serdesphy_loopback_switch.v"
+    # - "analog/ana_pll/serdesphy_phase_frequency_detector.v"
+    # - "analog/ana_pll/serdesphy_pll.v"
+    # - "analog/ana_pll/serdesphy_pll_charge_pump.v"
+    # - "analog/ana_pll/serdesphy_pll_loop_filter.v"
+    # - "analog/ana_pll/serdesphy_pll_vco.v"
+    # - "analog/ana_rx/serdesphy_cdr.v"
+    # - "analog/ana_rx/serdesphy_cdr_vco.v"
+    # - "analog/ana_rx/serdesphy_deserializer.v"
+    # - "analog/ana_rx/serdesphy_rx_differential_receiver.v"
+    # - "analog/ana_tx/serdesphy_serializer.v"
+    # - "analog/ana_tx/serdesphy_tx_differential_driver.v"
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
 pinout:
   # Inputs
-  ui[0]: "RX"
-  ui[1]: "SCL"
-  ui[2]: ""
-  ui[3]: ""
-  ui[4]: ""
-  ui[5]: ""
-  ui[6]: ""
-  ui[7]: ""
+  ui[0]: "CLK_REF"       # 24 MHz reference clock
+  ui[1]: "RST_N"         # Active-low reset
+  ui[2]: "TXD[0]"        # Transmit data bit 0
+  ui[3]: "TXD[1]"        # Transmit data bit 1
+  ui[4]: "TXD[2]"        # Transmit data bit 2
+  ui[5]: "TXD[3]"        # Transmit data bit 3
+  ui[6]: "TX_VALID"      # TX data valid strobe
+  ui[7]: "TEST_MODE"     # Test mode enable
 
   # Outputs
-  uo[0]: ""
-  uo[1]: ""
-  uo[2]: ""
-  uo[3]: ""
-  uo[4]: ""
-  uo[5]: ""
-  uo[6]: ""
-  uo[7]: ""
+  uo[0]: "RXD[0]"        # Receive data bit 0
+  uo[1]: "RXD[1]"        # Receive data bit 1
+  uo[2]: "RXD[2]"        # Receive data bit 2
+  uo[3]: "RXD[3]"        # Receive data bit 3
+  uo[4]: "PLL_LOCK"      # PLL lock indicator
+  uo[5]: "CDR_LOCK"      # CDR lock indicator
+  uo[6]: "PRBS_ERR"      # PRBS error flag
+  uo[7]: "RX_VALID"      # RX data valid strobe
 
   # Bidirectional pins
-  uio[0]: ""
-  uio[1]: ""
-  uio[2]: ""
-  uio[3]: ""
-  uio[4]: ""
-  uio[5]: ""
-  uio[6]: ""
-  uio[7]: ""
+  uio[0]: "SDA"           # I²C data (open-drain)
+  uio[1]: "SCL"           # I²C clock (≤24 MHz)
+  uio[2]: "TXP"           # TX differential (+)
+  uio[3]: "TXN"           # TX differential (-)
+  uio[4]: "RXP"           # RX differential (+)
+  uio[5]: "RXN"           # RX differential (-)
+  uio[6]: "LPBK_EN"       # Analog loopback enable
+  uio[7]: "DBG_ANA"       # Analog debug buffer
 
 # Do not change!
 yaml_version: 6
