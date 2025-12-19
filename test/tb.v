@@ -25,8 +25,8 @@ module tb ();
 
   wire out1, out2;
 
-  // Replace tt_um_raybello_tt_pure_sine_gen with your module name:
-  tt_um_raybello_pure_sine_gen_top user_project (
+  // Replace tt_um_raybello_serdesphy with your module name:
+  tt_um_raybello_serdesphy_top user_project (
       .ui_in  (ui_in),    // Dedicated inputs
       .uo_out (uo_out),   // Dedicated outputs
       .uio_in (uio_in),   // IOs: Input path

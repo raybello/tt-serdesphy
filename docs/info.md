@@ -9,23 +9,22 @@ You can also include images in this folder and reference them in the markdown. E
 
 ## How it works
 
-The Pure Sine Wave Generator is a digital Verilog-based module that produces a clean, stable sine wave output using a combination of lookup tables, PWM modulation, and optional feedback sampling.
+The SERDES PHY is a digital Verilog-based module that provides serializer/deserializer physical layer functionality for high-speed data transmission.
 
-1. **Waveform Generation (LUT-Based):**  
-   A lookup table stores discrete sine wave values. A phase accumulator or counter steps through the table at a fixed rate. Each output value represents a point on the sine wave.
+1. **Parallel-to-Serial Conversion:**  
+   The transmitter takes parallel data and converts it to a serial bitstream for transmission over high-speed interfaces.
 
-2. **SPWM Conversion (PWM Modulation):**  
-   The digital sine value is compared against a high-frequency triangular or sawtooth carrier signal to generate **Sinusoidal Pulse Width Modulation (SPWM)**.  
-   After filtering, this SPWM becomes a smooth analog sine wave.
+2. **Serial-to-Parallel Conversion:**  
+   The receiver recovers the serial bitstream and converts it back to parallel data format.
 
-3. **Clock Domain & Frequency Control:**  
-   Sine wave frequency is adjusted by modifying the LUT step size or phase increment. A larger step equals a higher output frequency.
+3. **Clock Data Recovery (CDR):**  
+   The receiver extracts timing information from the incoming serial data to synchronize with the transmitter.
 
-4. **Filtering (External or Digital):**  
-   The SPWM output drives power switches, and a low-pass LC filter reconstructs the actual sine waveform.
+4. **Line Coding and Encoding:**  
+   Data is encoded using appropriate line coding schemes (e.g., 8b/10b, NRZ) for reliable transmission.
 
-5. **Optional Voltage Sampling Feedback:**  
-   An ADC interface can sample voltage or current for amplitude regulation, overcurrent protection, and closed-loop stability.
+5. **Equalization and Signal Conditioning:**  
+   Signal conditioning circuits compensate for channel impairments and ensure signal integrity.
 
 ---
 
@@ -33,24 +32,24 @@ The Pure Sine Wave Generator is a digital Verilog-based module that produces a c
 
 1. **Simulation in Verilog Testbench:**  
    - Instantiate the module and provide the system clock.  
-   - Observe LUT output and PWM behavior in a simulator (ModelSim, Vivado Simulator, Verilator).  
-   - Validate sine progression and proper duty-cycle modulation.
+   - Observe serialization/deserialization behavior in a simulator (ModelSim, Vivado Simulator, Verilator).  
+   - Validate proper data conversion and timing relationships.
 
-2. **Observe SPWM Output:**  
-   - Use a logic analyzer or oscilloscope to view the PWM waveform.  
-   - The duty cycle should vary in a sinusoidal pattern.
+2. **Observe Serial Data Output:**  
+   - Use a logic analyzer or high-speed oscilloscope to view the serial data waveform.  
+   - Verify proper bit timing and data patterns.
 
-3. **Filter & Reconstruct Sine Wave:**  
-   - Pass the SPWM through an LC filter or power stage filter.  
-   - Verify a clean, low-distortion analog sine wave.
+3. **Test Parallel Data Interface:**  
+   - Apply known parallel data patterns at the transmitter input.  
+   - Verify correct recovery at the receiver output.
 
-4. **Frequency Change Test:**  
-   - Adjust LUT step size or phase increment in the module.  
-   - Confirm frequency changes proportionally.
+4. **Clock Domain Testing:**  
+   - Test with different clock frequencies and phase relationships.  
+   - Verify proper clock data recovery functionality.
 
-5. **Feedback Regulation (Optional):**  
-   - Apply known voltages to the ADC input.  
-   - Ensure amplitude regulation and protective actions behave as expected.
+5. **Signal Integrity Testing (Optional):**  
+   - Test with various channel conditions and impairments.  
+   - Verify equalization and error correction performance.
 
 ---
 
@@ -58,14 +57,15 @@ The Pure Sine Wave Generator is a digital Verilog-based module that produces a c
 
 Depending on your implementation, the following hardware may be used:
 
-- **LC Low-pass Filter** – Required for smoothing SPWM into an analog sine wave.  
-- **MOSFET/IGBT H-Bridge Power Stage** – For high-power AC output.  
-- **Gate Driver ICs** – For driving high/low-side power switches.  
-- **External ADC (optional)** – For voltage or current sampling.  
-- **Oscilloscope / Logic Analyzer** – For waveform verification.  
-- **DC Power Supply** – Provides the input bus voltage for power stages.
+- **High-Speed Transceivers** – Required for serial data transmission and reception.  
+- **Clock Generation Circuits** – For providing reference clocks and PLL functionality.  
+- **Signal Conditioning Components** – For line driving and impedance matching.  
+- **External Test Equipment** – For high-speed signal analysis and validation.  
+- **Oscilloscope / Logic Analyzer** – For waveform verification and timing analysis.  
+- **Power Supplies** – For providing clean power to high-speed circuits.
 
 Optional FPGA prototyping components:
 
-- **PMOD DAC/ADC Modules** – For rapid testing and signal visualization.
+- **High-Speed PMOD Modules** – For rapid testing of serial interfaces.  
+- **JTAG Debug Interfaces** – For real-time monitoring and debugging.
 
