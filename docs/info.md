@@ -11,6 +11,8 @@ You can also include images in this folder and reference them in the markdown. E
 
 The SERDES PHY is a digital Verilog-based module that provides serializer/deserializer physical layer functionality for high-speed data transmission.
 
+![System Overview](./arch.svg)
+
 1. **Parallel-to-Serial Conversion:**  
    The transmitter takes parallel data and converts it to a serial bitstream for transmission over high-speed interfaces.
 
