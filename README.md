@@ -1,10 +1,5 @@
 ![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 
-# Architecture Specification
-
-# SKY130 Manchester SerDes PHY Architecture Specification
-
-
 ## 1\. DEVICE OVERVIEW
 
 The SKY130 SerDes PHY is a single-lane serial transceiver implementing Manchester-encoded differential signalling at 240 Mbps. The device integrates a transmit PLL, receive clock/data recovery circuit, dual FIFOs, and pseudorandom bit sequence (PRBS) test pattern generator/checker. Configuration and monitoring are provided through an I²C slave interface.
