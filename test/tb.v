@@ -73,7 +73,7 @@ module tb ();
   assign uio_in[6] = lpbk_en;       // Loopback enable
 
   // Handle SDA bidirectional (uio_out[0]/uio_in[0])
-  assign uio_in[0] = sda_internal;
+  assign uio_out[0] = sda_internal;
   
   // Unused UIO inputs
   assign uio_in[2] = 1'b0;          // TXP (output)

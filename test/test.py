@@ -245,40 +245,35 @@ async def reset_sequence(dut):
     last_state = None
 
     for cycle in range(por_complete_timeout):
-        try:
-            # Check POR signals via testbench hierarchical path
-            por_state_val = int(dut.por_state.value)
-            por_complete_val = int(dut.por_complete.value)
-            por_active_val = int(dut.por_active.value)
+        # Check POR signals via testbench hierarchical path
+        por_state_val = int(dut.por_state.value)
+        por_complete_val = int(dut.por_complete.value)
+        por_active_val = int(dut.por_active.value)
 
-            # Log state changes during reset sequence
-            if por_state_val != last_state:
-                state_name = {
-                    STATE_POR_RESET: "POR_RESET",
-                    STATE_WAIT_SUPPLY: "WAIT_SUPPLY", 
-                    STATE_ANALOG_ISO: "ANALOG_ISO",
-                    STATE_DIGITAL_PULSE: "DIGITAL_PULSE",
-                    STATE_ANALOG_PULSE: "ANALOG_PULSE",
-                    STATE_RELEASE_ISO: "RELEASE_ISO",
-                    STATE_READY: "READY",
-                    STATE_ERROR: "ERROR"
-                }.get(por_state_val, f"UNKNOWN({por_state_val})")
+        # Log state changes during reset sequence
+        if por_state_val != last_state:
+            state_name = {
+                STATE_POR_RESET: "POR_RESET",
+                STATE_WAIT_SUPPLY: "WAIT_SUPPLY", 
+                STATE_ANALOG_ISO: "ANALOG_ISO",
+                STATE_DIGITAL_PULSE: "DIGITAL_PULSE",
+                STATE_ANALOG_PULSE: "ANALOG_PULSE",
+                STATE_RELEASE_ISO: "RELEASE_ISO",
+                STATE_READY: "READY",
+                STATE_ERROR: "ERROR"
+            }.get(por_state_val, f"UNKNOWN({por_state_val})")
 
-                dut._log.info(f"  POR State: {state_name} (0x{por_state_val:X})")
-                dut._log.info(f"  Signals: por_active={por_active_val}, por_complete={por_complete_val}")
-                last_state = por_state_val
+            dut._log.info(f"  POR State: {state_name} (0x{por_state_val:X})")
+            dut._log.info(f"  Signals: por_active={por_active_val}, por_complete={por_complete_val}")
+            last_state = por_state_val
 
-            if por_complete_val == 1:
-                dut._log.info(f"✓ POR completed after {cycle} cycles in READY state")
-                dut._log.info(
-                    f"  Signals: por_active={dut.por_active.value}, por_complete={dut.por_complete.value}"
-                )
-                break
-        except (ValueError, AttributeError):
-            # If hierarchical signals aren't accessible, wait a reasonable time
-            if cycle == 100:  # Log once that we're using fallback timing
-                dut._log.info("POR signals not accessible, using fallback timing...")
-                dut._log.info("Waiting 1000 cycles for POR to complete...")
+        if por_complete_val == 1:
+            dut._log.info(f"✓ POR completed after {cycle} cycles in READY state")
+            dut._log.info(
+                f"  Signals: por_active={dut.por_active.value}, por_complete={dut.por_complete.value}"
+            )
+            break
+        
 
         await ClockCycles(dut.clk, 1)
         por_complete_cycles = cycle

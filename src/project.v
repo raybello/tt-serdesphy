@@ -20,8 +20,8 @@ module tt_um_raybello_serdesphy_top (
   wire sda_internal;
   
   // Open-drain SDA implementation
-  assign sda_internal = (uio_oe[0]) ? uio_out[0] : 1'bz;
-  assign uio_out[0]   = 1'b0;  // Drive low when output enabled
+  // assign sda_internal = (uio_oe[0]) ? uio_out[0] : 1'bz;
+  // assign uio_out[0]   = 1'b0;  // Drive low when output enabled
   assign uio_oe[0]    = 1'b0;   // SDA is input by default (open-drain)
   
   // Configure bidirectional pin directions
@@ -49,7 +49,7 @@ module tt_um_raybello_serdesphy_top (
     .pll_lock   (uo_out[4]),    // PLL lock indicator
     
     // CSR Interface  
-    .sda        (sda_internal), // I²C data (open-drain)
+    .sda        (uio_out[0]), // I²C data (open-drain)
     .scl        (uio_in[1]),    // I²C clock (input)
     
     // Transmit

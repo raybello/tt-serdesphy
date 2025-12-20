@@ -38,6 +38,7 @@ module serdesphy_top(
 	// Internal clocks
 	wire clk_240m_tx;
 	wire clk_240m_rx;
+	
 	wire rst_n_24m;
 	wire rst_n_240m_tx;
 	wire rst_n_240m_rx;
@@ -51,38 +52,38 @@ module serdesphy_top(
 	wire por_complete;
 	
 	// PLL Control signals
-	wire phy_en = 1'b1;
-	wire iso_en = 1'b0;
-	wire [3:0] vco_trim = 4'b0000;
-	wire [1:0] cp_current = 2'b00;
-	wire pll_rst = 1'b0;
-	wire pll_bypass = 1'b0;
-	wire [2:0] cdr_gain = 3'b000;
-	wire cdr_fast_lock = 1'b0;
-	wire cdr_rst = 1'b0;
-	wire pll_ready;
-	wire [7:0] pll_status;
-	wire pll_error;
-	wire clk_24m_en = 1'b1;
-	wire clk_240m_tx_en = 1'b1;
-	wire clk_240m_rx_en = 1'b1;
+	wire phy_en;
+	reg iso_en = 1'b0;
+	reg [3:0] vco_trim = 4'b0000;
+	reg [1:0] cp_current = 2'b00;
+	reg pll_rst = 1'b0;
+	reg pll_bypass = 1'b0;
+	reg [2:0] cdr_gain = 3'b000;
+	reg cdr_fast_lock = 1'b0;
+	reg cdr_rst = 1'b0;
+	reg pll_ready;
+	reg [7:0] pll_status;
+	reg pll_error;
+	reg clk_24m_en = 1'b1;
+	reg clk_240m_tx_en = 1'b1;
+	reg clk_240m_rx_en = 1'b1;
 	
 	// CSR Control signals
-	wire tx_en = 1'b1;
-	wire tx_fifo_en = 1'b1;
-	wire tx_prbs_en = 1'b0;
-	wire tx_idle = 1'b0;
-	wire rx_en = 1'b1;
-	wire rx_fifo_en = 1'b1;
-	wire rx_prbs_chk_en = 1'b0;
-	wire rx_align_rst = 1'b0;
-	wire tx_data_sel = 1'b0;
-	wire rx_data_sel = 1'b0;
+	reg tx_en = 1'b1;
+	reg tx_fifo_en = 1'b1;
+	reg tx_prbs_en = 1'b0;
+	reg tx_idle = 1'b0;
+	reg rx_en = 1'b1;
+	reg rx_fifo_en = 1'b1;
+	reg rx_prbs_chk_en = 1'b0;
+	reg rx_align_rst = 1'b0;
+	reg tx_data_sel = 1'b0;
+	reg rx_data_sel = 1'b0;
 	
 	// Debug signals
-	wire dbg_vctrl = 1'b0;
-	wire dbg_pd = 1'b0;
-	wire dbg_fifo = 1'b0;
+	reg dbg_vctrl = 1'b0;
+	reg dbg_pd = 1'b0;
+	reg dbg_fifo = 1'b0;
 	
 	// TX Interface signals
 	wire tx_serial_data;
@@ -167,6 +168,7 @@ module serdesphy_top(
 		// Clock domains
 		.clk_240m_tx        (clk_240m_tx),
 		.clk_240m_rx        (clk_240m_rx),
+		// Clock domains reset
 		.rst_n_24m          (rst_n_24m),
 		.rst_n_240m_tx      (rst_n_240m_tx),
 		.rst_n_240m_rx      (rst_n_240m_rx),
@@ -284,6 +286,7 @@ module serdesphy_top(
 		// Clock and Reset
 		.clk_ref_24m        (clk_ref_24m),
 		.rst_n              (rst_n),
+		
 		.clk_240m_tx        (clk_240m_tx),
 		.clk_240m_rx        (clk_240m_rx),
 		

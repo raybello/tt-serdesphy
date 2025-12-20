@@ -59,7 +59,7 @@ module serdesphy_clock_manager (
             cdr_lock_counter <= 10'h000;
             cdr_lock_reg <= 0;
         end else if (phy_en && pll_lock_reg) begin
-            if (cdr_lock_counter < 10'd1200) begin  // ~50us at 24MHz
+            if (cdr_lock_counter < 10'd100) begin  // ~50us at 24MHz
                 cdr_lock_counter <= cdr_lock_counter + 1;
                 cdr_lock_reg <= 0;
             end else begin

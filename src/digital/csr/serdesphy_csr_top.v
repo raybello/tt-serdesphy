@@ -8,77 +8,77 @@
 
 module serdesphy_csr_top (
     // Clock and reset
-    input  wire       clk,              // System clock (24 MHz)
-    input  wire       rst_n,            // Active-low reset
+    input       clk,              // System clock (24 MHz)
+    input       rst_n,            // Active-low reset
     
     // Physical I2C interface
-    inout  wire       sda,              // I2C data (open-drain)
-    input  wire       scl,              // I2C clock
+    inout       sda,              // I2C data (open-drain)
+    input       scl,              // I2C clock
     
     // Control outputs to PHY blocks
-    output wire       phy_en,           // PHY global enable
-    output wire       iso_en,           // Analog isolation enable
-    output wire       tx_en,            // Transmit enable
-    output wire       tx_fifo_en,       // TX FIFO enable
-    output wire       tx_prbs_en,       // TX PRBS enable
-    output wire       tx_idle,          // Force idle pattern
-    output wire       rx_en,            // Receive enable
-    output wire       rx_fifo_en,       // RX FIFO enable
-    output wire       rx_prbs_chk_en,   // RX PRBS check enable
-    output wire       rx_align_rst,     // Reset alignment FSM
-    output wire       tx_data_sel,      // TX data source select
-    output wire       rx_data_sel,      // RX output select
-    output wire [3:0] vco_trim,         // VCO frequency trim
-    output wire [1:0] cp_current,       // Charge pump current
-    output wire       pll_rst,          // PLL reset
-    output wire       pll_bypass,       // PLL bypass
-    output wire [2:0] cdr_gain,         // CDR gain setting
-    output wire       cdr_fast_lock,    // CDR fast lock mode
-    output wire       cdr_rst,          // CDR reset
+    output       phy_en,           // PHY global enable
+    output       iso_en,           // Analog isolation enable
+    output       tx_en,            // Transmit enable
+    output       tx_fifo_en,       // TX FIFO enable
+    output       tx_prbs_en,       // TX PRBS enable
+    output       tx_idle,          // Force idle pattern
+    output       rx_en,            // Receive enable
+    output       rx_fifo_en,       // RX FIFO enable
+    output       rx_prbs_chk_en,   // RX PRBS check enable
+    output       rx_align_rst,     // Reset alignment FSM
+    output       tx_data_sel,      // TX data source select
+    output       rx_data_sel,      // RX output select
+    output [3:0] vco_trim,         // VCO frequency trim
+    output [1:0] cp_current,       // Charge pump current
+    output       pll_rst,          // PLL reset
+    output       pll_bypass,       // PLL bypass
+    output [2:0] cdr_gain,         // CDR gain setting
+    output       cdr_fast_lock,    // CDR fast lock mode
+    output       cdr_rst,          // CDR reset
     
     // Debug control outputs
-    output wire       dbg_vctrl,        // Debug VCO control voltage
-    output wire       dbg_pd,           // Debug phase detector
-    output wire       dbg_fifo,         // Debug FIFO status
-    output wire       dbg_an,           // Analog debug output
+    output       dbg_vctrl,        // Debug VCO control voltage
+    output       dbg_pd,           // Debug phase detector
+    output       dbg_fifo,         // Debug FIFO status
+    output       dbg_an,           // Analog debug output
     
     // Status inputs from TX block
-    input  wire       tx_fifo_full,     // TX FIFO full flag
-    input  wire       tx_fifo_empty,    // TX FIFO empty flag
-    input  wire       tx_overflow,      // TX FIFO overflow (sticky)
-    input  wire       tx_underflow,     // TX FIFO underflow (sticky)
-    input  wire       tx_active,        // TX data path active
-    input  wire       tx_error,         // TX error flag
+    input        tx_fifo_full,     // TX FIFO full flag
+    input        tx_fifo_empty,    // TX FIFO empty flag
+    input        tx_overflow,      // TX FIFO overflow (sticky)
+    input        tx_underflow,     // TX FIFO underflow (sticky)
+    input        tx_active,        // TX data path active
+    input        tx_error,         // TX error flag
     
     // Status inputs from RX block
-    input  wire       rx_fifo_full,     // RX FIFO full flag
-    input  wire       rx_fifo_empty,    // RX FIFO empty flag
-    input  wire       rx_overflow,      // RX FIFO overflow (sticky)
-    input  wire       rx_underflow,     // RX FIFO underflow (sticky)
-    input  wire       rx_active,        // RX data path active
-    input  wire       rx_error,         // RX error flag
-    input  wire       rx_aligned,       // RX alignment achieved
+    input        rx_fifo_full,     // RX FIFO full flag
+    input        rx_fifo_empty,    // RX FIFO empty flag
+    input        rx_overflow,      // RX FIFO overflow (sticky)
+    input        rx_underflow,     // RX FIFO underflow (sticky)
+    input        rx_active,        // RX data path active
+    input        rx_error,         // RX error flag
+    input        rx_aligned,       // RX alignment achieved
     
     // Status inputs from PLL/CDR blocks
-    input  wire       pll_lock,         // PLL lock indicator
-    input  wire       cdr_lock,         // CDR lock indicator
-    input  wire       pll_ready,        // PLL ready flag
-    input  wire       phy_ready,        // PHY ready flag
+    input        pll_lock,         // PLL lock indicator
+    input        cdr_lock,         // CDR lock indicator
+    input        pll_ready,        // PLL ready flag
+    input        phy_ready,        // PHY ready flag
     
     // Status inputs from POR block
-    input  wire       power_good,       // Power supplies stable
-    input  wire       por_active,       // POR sequence active
-    input  wire       por_complete,     // POR sequence complete
+    input        power_good,       // Power supplies stable
+    input        por_active,       // POR sequence active
+    input        por_complete,     // POR sequence complete
     
     // Status inputs from analog blocks
-    input  wire       prbs_err,         // PRBS error detected (sticky)
-    input  wire [7:0] pll_status,       // Detailed PLL status
-    input  wire       pll_error,        // PLL error flag
+    input        prbs_err,         // PRBS error detected (sticky)
+    input  [7:0] pll_status,       // Detailed PLL status
+    input        pll_error,        // PLL error flag
     
     // Status outputs
-    output wire       csr_busy,         // CSR transaction active
-    output wire       csr_error,        // CSR transaction error
-    output wire [7:0] system_status     // Aggregated system status
+    output       csr_busy,         // CSR transaction active
+    output       csr_error,        // CSR transaction error
+    output [7:0] system_status     // Aggregated system status
 );
 
     // Internal register interface signals
@@ -161,33 +161,33 @@ module serdesphy_csr_top (
     
     // Debug input multiplexing
     wire [7:0] debug_sources;
-    assign debug_sources = {
-        pll_status[7:0],     // Source 7: Detailed PLL status
-        1'b0,               // Source 6: Reserved
-        1'b0,               // Source 5: Reserved
-        1'b0,               // Source 4: Reserved
-        tx_fifo_full,        // Source 3: TX FIFO full
-        rx_fifo_full,        // Source 2: RX FIFO full
-        pll_lock,            // Source 1: PLL lock
-        cdr_lock             // Source 0: CDR lock
-    };
+    // assign debug_sources = {
+    //     pll_status[7:0],     // Source 7: Detailed PLL status
+    //     1'b0,               // Source 6: Reserved
+    //     1'b0,               // Source 5: Reserved
+    //     1'b0,               // Source 4: Reserved
+    //     tx_fifo_full,        // Source 3: TX FIFO full
+    //     rx_fifo_full,        // Source 2: RX FIFO full
+    //     pll_lock,            // Source 1: PLL lock
+    //     cdr_lock             // Source 0: CDR lock
+    // };
     
-    // Instantiate debug mux
-    serdesphy_debug_mux u_debug_mux (
-        .clk           (clk),
-        .rst_n         (rst_n),
+    // // Instantiate debug mux
+    // serdesphy_debug_mux u_debug_mux (
+    //     .clk           (clk),
+    //     .rst_n         (rst_n),
         
-        // Debug selection control
-        .dbg_vctrl     (dbg_vctrl),
-        .dbg_pd        (dbg_pd),
-        .dbg_fifo      (dbg_fifo),
+    //     // Debug selection control
+    //     .dbg_vctrl     (dbg_vctrl),
+    //     .dbg_pd        (dbg_pd),
+    //     .dbg_fifo      (dbg_fifo),
         
-        // Debug input sources
-        .debug_sources (debug_sources),
+    //     // Debug input sources
+    //     .debug_sources (debug_sources),
         
-        // Analog debug output
-        .debug_analog  (dbg_an)
-    );
+    //     // Analog debug output
+    //     .debug_analog  (dbg_an)
+    // );
     
     // System status aggregation
     assign system_error = fifo_err || prbs_err || pll_error || tx_error || rx_error || i2c_error;

@@ -80,7 +80,7 @@ module serdesphy_csr_registers (
     
     // Initialize registers
     initial begin
-        phy_enable_reg   = 8'h00;  // PHY disabled by default
+        phy_enable_reg   = 8'h01;  // PHY enabled by default
         tx_config_reg    = 8'h00;  // TX disabled by default
         rx_config_reg    = 8'h00;  // RX disabled by default
         data_select_reg  = 8'h01;  // TX=PRBS, RX=FIFO
@@ -92,7 +92,7 @@ module serdesphy_csr_registers (
     // Register write logic
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            phy_enable_reg   <= 8'h00;
+            phy_enable_reg   <= 8'h01;
             tx_config_reg    <= 8'h00;
             rx_config_reg    <= 8'h00;
             data_select_reg  <= 8'h01;

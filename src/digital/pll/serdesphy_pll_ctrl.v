@@ -53,8 +53,8 @@ module serdesphy_pll_ctrl (
     // PLL status register bits
     localparam STATUS_PLL_EN       = 7;
     localparam STATUS_PLL_BYPASS   = 6;
-    localparam STATUS_VCO_TRIM     = 5:2;
-    localparam STATUS_CP_CURRENT   = 1:0;
+    localparam STATUS_VCO_TRIM     = 5'h2;
+    localparam STATUS_CP_CURRENT   = 1'h0;
     
     // Internal signals
     reg        pll_enable_reg;
@@ -216,8 +216,7 @@ module serdesphy_pll_ctrl (
                 pll_enable_reg,           // Bit 7: PLL enabled
                 pll_bypass_en_reg,         // Bit 6: PLL bypass
                 pll_vco_trim_reg,          // Bits 5:2: VCO trim
-                pll_cp_current_reg,        // Bits 1:0: Charge pump current
-                2'b00                     // Padding
+                pll_cp_current_reg        // Bits 1:0: Charge pump current
             };
         end
     end
