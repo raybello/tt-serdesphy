@@ -376,7 +376,7 @@ async def mission_mode_traffic(dut):
     await i2c_write_register(dut, 0x02, 0x03)  # RX_EN=1, RX_FIFO_EN=1, RX_PRBS_CHK_EN=0
     
     # Configure data path to use FIFO (not PRBS)
-    await i2c_write_register(dut, 0x03, 0x00)  # TX_DATA_SEL=0 (FIFO), RX_DATA_SEL=0 (FIFO)
+    await i2c_write_register(dut, 0x03, 0x00)  # TX_DATA_SEL=1 (FIFO), RX_DATA_SEL=0 (FIFO)
     
     # Configure PLL (clear reset, nominal VCO trim)
     await i2c_write_register(dut, 0x04, 0x08)  # PLL_RST=0, VCO_TRIM=8
