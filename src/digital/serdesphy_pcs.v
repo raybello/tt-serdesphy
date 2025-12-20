@@ -10,7 +10,7 @@ descrambling etc.
     input       clk_ref_24m,        // 24 MHz reference clock
     input       rst_n,              // Global reset (active-low)
     output      phy_en,             // PHY enable
-    input       iso_en,             // Isolation enable
+    output      iso_en,             // Isolation enable
     
     // Power Monitoring (from top level)
     input       dvdd_ok,            // 1.8V digital supply OK
@@ -34,34 +34,34 @@ descrambling etc.
     input       scl,                // I2C clock
     
     // CSR Interface - TX Controls
-    input       tx_en,              // Transmit enable
-    input       tx_fifo_en,         // TX FIFO enable
-    input       tx_prbs_en,         // TX PRBS enable
-    input       tx_idle,            // Force idle pattern
-    input       tx_data_sel,        // TX data source select (0=FIFO, 1=PRBS)
+    output      tx_en,              // Transmit enable
+    output      tx_fifo_en,         // TX FIFO enable
+    output      tx_prbs_en,         // TX PRBS enable
+    output      tx_idle,            // Force idle pattern
+    output      tx_data_sel,        // TX data source select (0=FIFO, 1=PRBS)
     
     // CSR Interface - RX Controls
-    input       rx_en,              // Receive enable
-    input       rx_fifo_en,         // RX FIFO enable
-    input       rx_prbs_chk_en,     // RX PRBS check enable
-    input       rx_align_rst,       // Reset alignment FSM
-    input       rx_data_sel,        // RX output select (0=FIFO, 1=PRBS status)
+    output      rx_en,              // Receive enable
+    output      rx_fifo_en,         // RX FIFO enable
+    output      rx_prbs_chk_en,     // RX PRBS check enable
+    output      rx_align_rst,       // Reset alignment FSM
+    output      rx_data_sel,        // RX output select (0=FIFO, 1=PRBS status)
     
     // CSR Interface - PLL Controls
-    input [3:0] vco_trim,           // VCO trim control
-    input [1:0] cp_current,         // Charge pump current
-    input       pll_rst,            // PLL reset
-    input       pll_bypass,         // PLL bypass
+    output [3:0] vco_trim,          // VCO trim control
+    output [1:0] cp_current,        // Charge pump current
+    output       pll_rst,           // PLL reset
+    output       pll_bypass,        // PLL bypass
     
     // CSR Interface - CDR Controls
-    input [2:0] cdr_gain,           // CDR loop gain
-    input       cdr_fast_lock,      // CDR fast lock enable
-    input       cdr_rst,            // CDR reset
+    output [2:0] cdr_gain,          // CDR loop gain
+    output       cdr_fast_lock,     // CDR fast lock enable
+    output       cdr_rst,           // CDR reset
     
     // CSR Interface - Debug
-    input       dbg_vctrl,          // Debug voltage control
-    input       dbg_pd,             // Debug power down
-    input       dbg_fifo,           // Debug FIFO control
+    output      dbg_vctrl,          // Debug voltage control
+    output      dbg_pd,             // Debug power down
+    output      dbg_fifo,           // Debug FIFO control
     
     // TX Data Interface
     input [3:0] tx_data,            // 4-bit transmit data
