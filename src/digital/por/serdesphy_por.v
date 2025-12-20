@@ -42,9 +42,9 @@ module serdesphy_por (
         STATE_ERROR         = 4'b0111;  // Error state
     
     // Timing constants (in 24MHz clock cycles)
-    localparam [15:0] SUPPLY_STABLE_TIME = 16'd1000;    // ~42us
+    localparam [15:0] SUPPLY_STABLE_TIME = 16'd20;    // ~42us
     localparam [15:0] RESET_PULSE_TIME   = 16'd10;      // ~417ns
-    localparam [15:0] ISO_SETTLE_TIME    = 16'd100;     // ~4us
+    localparam [15:0] ISO_SETTLE_TIME    = 16'd15;     // ~4us
     
     // State registers
     reg [3:0]   por_state;

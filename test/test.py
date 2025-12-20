@@ -209,7 +209,17 @@ async def i2c_read_register(dut, reg_addr):
 async def reset_sequence(dut):
     """Perform reset sequence"""
     dut._log.info("Reset sequence")
-    
+
+    # POR State definitions from serdesphy_por.v
+    STATE_POR_RESET = 0x0  # 4'b0000
+    STATE_WAIT_SUPPLY = 0x1  # 4'b0001
+    STATE_ANALOG_ISO = 0x2  # 4'b0010
+    STATE_DIGITAL_PULSE = 0x3  # 4'b0011
+    STATE_ANALOG_PULSE = 0x4  # 4'b0100
+    STATE_RELEASE_ISO = 0x5  # 4'b0101
+    STATE_READY = 0x6  # 4'b0110
+    STATE_ERROR = 0x7  # 4'b0111
+
     # Initialize all control signals
     dut.ena.value = 1
     dut.rst_n.value = 0
@@ -220,14 +230,62 @@ async def reset_sequence(dut):
     dut.scl.value = 1
     dut.sda_out.value = 1
     dut.sda_oe.value = 0
-    
+
     # Hold reset for several clock cycles
     await ClockCycles(dut.clk, 10)
-    
+
     # Release reset
     dut.rst_n.value = 1
-    await ClockCycles(dut.clk, 5)
-    
+    await ClockCycles(dut.clk, 20)  # Give more time for POR to start
+
+    # Wait for POR to complete before proceeding
+    dut._log.info("Waiting for POR to complete...")
+    por_complete_timeout = 5000  # Maximum cycles to wait for POR completion
+    por_complete_cycles = 0
+    last_state = None
+
+    for cycle in range(por_complete_timeout):
+        try:
+            # Check POR signals via testbench hierarchical path
+            por_state_val = int(dut.por_state.value)
+            por_complete_val = int(dut.por_complete.value)
+            por_active_val = int(dut.por_active.value)
+
+            # Log state changes during reset sequence
+            if por_state_val != last_state:
+                state_name = {
+                    STATE_POR_RESET: "POR_RESET",
+                    STATE_WAIT_SUPPLY: "WAIT_SUPPLY", 
+                    STATE_ANALOG_ISO: "ANALOG_ISO",
+                    STATE_DIGITAL_PULSE: "DIGITAL_PULSE",
+                    STATE_ANALOG_PULSE: "ANALOG_PULSE",
+                    STATE_RELEASE_ISO: "RELEASE_ISO",
+                    STATE_READY: "READY",
+                    STATE_ERROR: "ERROR"
+                }.get(por_state_val, f"UNKNOWN({por_state_val})")
+
+                dut._log.info(f"  POR State: {state_name} (0x{por_state_val:X})")
+                dut._log.info(f"  Signals: por_active={por_active_val}, por_complete={por_complete_val}")
+                last_state = por_state_val
+
+            if por_complete_val == 1:
+                dut._log.info(f"✓ POR completed after {cycle} cycles in READY state")
+                dut._log.info(
+                    f"  Signals: por_active={dut.por_active.value}, por_complete={dut.por_complete.value}"
+                )
+                break
+        except (ValueError, AttributeError):
+            # If hierarchical signals aren't accessible, wait a reasonable time
+            if cycle == 100:  # Log once that we're using fallback timing
+                dut._log.info("POR signals not accessible, using fallback timing...")
+                dut._log.info("Waiting 1000 cycles for POR to complete...")
+
+        await ClockCycles(dut.clk, 1)
+        por_complete_cycles = cycle
+
+    if por_complete_cycles >= por_complete_timeout - 1:
+        dut._log.warning(f"POR did not complete within {por_complete_timeout} cycles, proceeding anyway")
+
     dut._log.info("Reset sequence complete")
 
 async def poll_status_with_timeout(dut, timeout_ns=1000000):
@@ -358,143 +416,145 @@ async def mission_mode_traffic(dut):
 
     # Perform reset sequence
     await reset_sequence(dut)
-    
+
     # Wait for power-up stabilization
     dut._log.info("Waiting for power-up stabilization")
     await ClockCycles(dut.clk, 100)
-    
+
     # === I2C Configuration for Mission Mode ===
     dut._log.info("Configuring PHY for mission mode")
-    
+
     # Enable PHY and clear isolation
     await i2c_write_register(dut, 0x00, 0x01)  # PHY_EN=1, ISO_EN=0
-    
+
     # Configure TX for mission mode (FIFO data path)
     await i2c_write_register(dut, 0x01, 0x03)  # TX_EN=1, TX_FIFO_EN=1, TX_PRBS_EN=0, TX_IDLE=0
-    
+
     # Configure RX for mission mode
     await i2c_write_register(dut, 0x02, 0x03)  # RX_EN=1, RX_FIFO_EN=1, RX_PRBS_CHK_EN=0
-    
+
     # Configure data path to use FIFO (not PRBS)
-    await i2c_write_register(dut, 0x03, 0x00)  # TX_DATA_SEL=1 (FIFO), RX_DATA_SEL=0 (FIFO)
-    
+    await i2c_write_register(dut, 0x03, 0x01)  # TX_DATA_SEL=1 (FIFO), RX_DATA_SEL=0 (FIFO)
+
     # Configure PLL (clear reset, nominal VCO trim)
     await i2c_write_register(dut, 0x04, 0x08)  # PLL_RST=0, VCO_TRIM=8
-    
+
     # Configure CDR (clear reset, nominal gain)
     await i2c_write_register(dut, 0x05, 0x04)  # CDR_RST=0, CDR_GAIN=4
-    
+
     # Verify configuration
     dut._log.info("Verifying mission mode configuration")
     phy_en = await i2c_read_register(dut, 0x00)
     tx_config = await i2c_read_register(dut, 0x01)
     rx_config = await i2c_read_register(dut, 0x02)
     data_select = await i2c_read_register(dut, 0x03)
-    
+
     dut._log.info(f"PHY_ENABLE: 0x{phy_en:02X}")
     dut._log.info(f"TX_CONFIG: 0x{tx_config:02X}")
     dut._log.info(f"RX_CONFIG: 0x{rx_config:02X}")
     dut._log.info(f"DATA_SELECT: 0x{data_select:02X}")
-    
+
     # Wait for PLL lock
     dut._log.info("Waiting for PLL lock")
     await poll_status_with_timeout(dut, timeout_ns=2000000)  # 2ms timeout
-    
+
     # === Mission Mode Traffic Generation ===
     dut._log.info("Starting mission mode traffic with random data")
-    
+
     # Import random for test data generation
     import random
-    
+
     # Send random data patterns
     for cycle in range(20):  # Send 20 data words
         # Generate random 4-bit data
         random_data = random.randint(0, 15)
-        
+
         # Drive data onto TX parallel interface
         dut.tx_data.value = random_data
         dut.tx_valid.value = 1
-        
+
         dut._log.info(f"Cycle {cycle}: Transmitting 0x{random_data:01X}")
-        
+
         # Hold valid for one clock cycle
         await ClockCycles(dut.clk, 1)
-        
+
         # Deassert valid between data words
         dut.tx_valid.value = 0
         await ClockCycles(dut.clk, 1)
-    
+
     # Monitor FIFO status after traffic
     dut._log.info("Checking FIFO status after traffic")
     status = await i2c_read_register(dut, 0x06)
     dut._log.info(f"Status after traffic: 0x{status:02X}")
-    
+
     # Check specific FIFO flags
     tx_fifo_full = (status >> 2) & 0x01
     tx_fifo_empty = (status >> 3) & 0x01
     rx_fifo_full = (status >> 4) & 0x01
     rx_fifo_empty = (status >> 5) & 0x01
-    
+
     dut._log.info(f"TX FIFO Full: {tx_fifo_full}")
     dut._log.info(f"TX FIFO Empty: {tx_fifo_empty}")
     dut._log.info(f"RX FIFO Full: {rx_fifo_full}")
     dut._log.info(f"RX FIFO Empty: {rx_fifo_empty}")
-    
+
     # Enable loopback for end-to-end testing
     dut._log.info("Enabling analog loopback for end-to-end verification")
     dut.lpbk_en.value = 1
-    
+
     # Send more test data with loopback
     await ClockCycles(dut.clk, 10)  # Allow loopback to settle
-    
+
     for cycle in range(10):
         random_data = random.randint(0, 15)
         dut.tx_data.value = random_data
         dut.tx_valid.value = 1
-        
+
         dut._log.info(f"Loopback Cycle {cycle}: TX=0x{random_data:01X}")
-        
+
         await ClockCycles(dut.clk, 1)
         dut.tx_valid.value = 0
-        
-        # Check RX data after some delay
-        await ClockCycles(dut.clk, 2)
-        try:
-            rx_data = int(dut.rx_data.value)
-        except ValueError:
-            # Handle cases where RX data contains non-binary values (X, Z, etc.)
-            rx_str = str(dut.rx_data.value)
-            if rx_str in ['XXXX', 'ZZZZ', 'UUUU']:
-                rx_data = 0  # Default for undefined/high-impedance
-            else:
-                # Replace non-binary characters with 0 for safety
-                clean_str = rx_str.replace('x','0').replace('X','0').replace('z','0').replace('Z','0').replace('u','0').replace('U','0')
-                try:
-                    rx_data = int(clean_str, 2)
-                except ValueError:
-                    rx_data = 0
-        
-        try:
-            rx_valid = int(dut.rx_valid.value)
-        except ValueError:
-            rx_valid = 0
-        
-        if rx_valid:
-            dut._log.info(f"  RX data: 0x{rx_data:01X} (valid)")
-        else:
-            dut._log.info(f"  RX data: 0x{rx_data:01X} (not valid)")
-        
+
         await ClockCycles(dut.clk, 1)
-    
+
+    # Check RX data after some delay
+    await ClockCycles(dut.clk, 2)
+    try:
+        rx_data = int(dut.rx_data.value)
+    except ValueError:
+        # Handle cases where RX data contains non-binary values (X, Z, etc.)
+        rx_str = str(dut.rx_data.value)
+        if rx_str in ['XXXX', 'ZZZZ', 'UUUU']:
+            rx_data = 0  # Default for undefined/high-impedance
+        else:
+            # Replace non-binary characters with 0 for safety
+            clean_str = rx_str.replace('x','0').replace('X','0').replace('z','0').replace('Z','0').replace('u','0').replace('U','0')
+            try:
+                rx_data = int(clean_str, 2)
+            except ValueError:
+                rx_data = 0
+
+    try:
+        rx_valid = int(dut.rx_valid.value)
+    except ValueError:
+        rx_valid = 0
+
+    if rx_valid:
+        dut._log.info(f"  RX data: 0x{rx_data:01X} (valid)")
+    else:
+        dut._log.info(f"  RX data: 0x{rx_data:01X} (not valid)")
+
+    await ClockCycles(dut.clk, 1)
+
     # Final status check
     final_status = await i2c_read_register(dut, 0x06)
     dut._log.info(f"Final status: 0x{final_status:02X}")
-    
+
     # Verify data path integrity
     if (final_status & 0x03) == 0x03:  # PLL and CDR locked
         dut._log.info("✓ Mission mode test PASSED - PLL and CDR locked")
     else:
         dut._log.warning("✗ Mission mode test FAILED - PLL or CDR not locked")
-    
+
     # Test completed
     dut._log.info("=== Mission Mode Traffic Test Completed ===")

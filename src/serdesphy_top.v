@@ -22,7 +22,17 @@ module serdesphy_top(
 	// Configuration
 	input 	test_mode,
 	input	lpbk_en,
-	output	dbg_ana
+	output	dbg_ana,
+	// Additional Status Outputs
+	output 	tx_active,
+	output 	tx_error,
+	output 	rx_active,
+	output 	rx_error,
+	output 	rx_aligned,
+	output 	phy_ready,
+	// Power Monitoring Inputs
+	input 	dvdd_ok,
+	input 	avdd_ok
 	);
 
 	// Internal clocks
@@ -33,8 +43,6 @@ module serdesphy_top(
 	wire rst_n_240m_rx;
 	
 	// Power-on-Reset signals
-	wire dvdd_ok;        // 1.8V digital supply OK (assume always OK for now)
-	wire avdd_ok;        // 3.3V analog supply OK (assume always OK for now)
 	wire power_good;
 	wire analog_iso_n;
 	wire digital_reset_n;
@@ -43,39 +51,38 @@ module serdesphy_top(
 	wire por_complete;
 	
 	// PLL Control signals
-	wire phy_en;
-	wire iso_en;
-	wire [3:0] vco_trim;
-	wire [1:0] cp_current;
-	wire pll_rst;
-	wire pll_bypass;
-	wire [2:0] cdr_gain;
-	wire cdr_fast_lock;
-	wire cdr_rst;
+	wire phy_en = 1'b1;
+	wire iso_en = 1'b0;
+	wire [3:0] vco_trim = 4'b0000;
+	wire [1:0] cp_current = 2'b00;
+	wire pll_rst = 1'b0;
+	wire pll_bypass = 1'b0;
+	wire [2:0] cdr_gain = 3'b000;
+	wire cdr_fast_lock = 1'b0;
+	wire cdr_rst = 1'b0;
 	wire pll_ready;
 	wire [7:0] pll_status;
 	wire pll_error;
-	wire clk_24m_en;
-	wire clk_240m_tx_en;
-	wire clk_240m_rx_en;
-	wire phy_ready;
+	wire clk_24m_en = 1'b1;
+	wire clk_240m_tx_en = 1'b1;
+	wire clk_240m_rx_en = 1'b1;
 	
 	// CSR Control signals
-	wire tx_en;
-	wire tx_fifo_en;
-	wire tx_prbs_en;
-	wire tx_idle;
-	wire rx_en;
-	wire rx_fifo_en;
-	wire rx_prbs_chk_en;
-	wire rx_align_rst;
-	wire tx_data_sel;
-	wire rx_data_sel;
+	wire tx_en = 1'b1;
+	wire tx_fifo_en = 1'b1;
+	wire tx_prbs_en = 1'b0;
+	wire tx_idle = 1'b0;
+	wire rx_en = 1'b1;
+	wire rx_fifo_en = 1'b1;
+	wire rx_prbs_chk_en = 1'b0;
+	wire rx_align_rst = 1'b0;
+	wire tx_data_sel = 1'b0;
+	wire rx_data_sel = 1'b0;
 	
 	// Debug signals
-	wire dbg_vctrl;
-	wire dbg_pd;
-	wire dbg_fifo;
+	wire dbg_vctrl = 1'b0;
+	wire dbg_pd = 1'b0;
+	wire dbg_fifo = 1'b0;
 	
 	// TX Interface signals
 	wire tx_serial_data;
@@ -85,10 +92,6 @@ module serdesphy_top(
 	wire tx_fifo_empty;
 	wire tx_overflow;
 	wire tx_underflow;
-	wire tx_active;
-	wire tx_error;
-	wire serializer_active;
-	wire serializer_status;
 	wire if_error_tx;
 	
 	// RX Interface signals
@@ -99,241 +102,249 @@ module serdesphy_top(
 	wire rx_fifo_empty;
 	wire rx_overflow;
 	wire rx_underflow;
-	wire rx_active;
-	wire rx_error;
-	wire rx_aligned;
+	
+	// PCS to PMA interface signals
+	wire pll_enable;
+	wire pll_reset_n;
+	wire pll_bypass_en;
+	wire pll_iso_n;
+	wire serializer_enable;
+	wire serializer_clock;
+	wire serializer_reset_n;
+	wire deserializer_enable;
+	wire deserializer_clock;
+	wire deserializer_reset_n;
+	wire deserializer_data;
+	
+	// PMA to PCS interface signals
+	wire serializer_ready;
+	wire serializer_error;
+	wire deserializer_ready;
+	wire deserializer_lock;
+	wire deserializer_error;
 	wire deserializer_active;
 	wire deserializer_status;
-	wire if_error_rx;
 	
 	// Analog interface signals (simplified models)
-	wire serializer_ready = 1'b1;
-	wire serializer_error = 1'b0;
-	wire deserializer_ready = 1'b1;
-	wire deserializer_lock = 1'b1;
-	wire deserializer_error = 1'b0;
 	wire pll_lock_raw = 1'b1;
 	wire pll_vco_ok = 1'b1;
 	wire pll_cp_ok = 1'b1;
 	
-	// // Power-on-Reset Controller
-	// serdesphy_por u_por (
-	// 	.dvdd_ok        (dvdd_ok),
-	// 	.avdd_ok        (avdd_ok),
-	// 	.rst_n_in       (rst_n),
-	// 	.clk            (clk_ref_24m),
-	// 	.phy_en         (phy_en),
-	// 	.iso_en         (iso_en),
-	// 	.power_good     (power_good),
-	// 	.analog_iso_n   (analog_iso_n),
-	// 	.digital_reset_n(digital_reset_n),
-	// 	.analog_reset_n (analog_reset_n),
-	// 	.por_active     (por_active),
-	// 	.por_complete   (por_complete)
-	// );
+	// PCS Internal Logic - Connect RX serial data from PMA
+	assign rx_serial_data = deserializer_data;
 	
-	// // PLL Controller
-	// serdesphy_pll_ctrl u_pll_ctrl (
-	// 	.clk_ref_24m     (clk_ref_24m),
-	// 	.rst_n           (digital_reset_n),
-	// 	.phy_en          (phy_en),
-	// 	.vco_trim        (vco_trim),
-	// 	.cp_current      (cp_current),
-	// 	.pll_rst         (pll_rst),
-	// 	.pll_bypass      (pll_bypass),
-	// 	.pll_enable      (),  // To analog PLL
-	// 	.pll_reset_n     (),  // To analog PLL
-	// 	.pll_bypass_en   (),  // To analog PLL
-	// 	.pll_vco_trim    (),  // To analog PLL
-	// 	.pll_cp_current  (),  // To analog PLL
-	// 	.pll_iso_n       (),  // To analog PLL
-	// 	.pll_lock_raw    (pll_lock_raw),
-	// 	.pll_vco_ok      (pll_vco_ok),
-	// 	.pll_cp_ok       (pll_cp_ok),
-	// 	.pll_lock        (pll_lock),
-	// 	.pll_ready       (pll_ready),
-	// 	.pll_status      (pll_status),
-	// 	.pll_error       (pll_error),
-	// 	.clk_24m_en      (clk_24m_en),
-	// 	.clk_240m_tx_en  (clk_240m_tx_en),
-	// 	.clk_240m_rx_en  (clk_240m_rx_en),
-	// 	.cdr_lock        (cdr_lock),
-	// 	.phy_ready       (phy_ready)
-	// );
+	// PCS Internal Logic - Generate PMA control signals
+	assign pll_enable = phy_en && !iso_en;
+	assign pll_reset_n = digital_reset_n && !pll_rst;
+	assign pll_bypass_en = pll_bypass;
+	assign pll_iso_n = analog_iso_n;
 	
-	// // CSR Top Module
-	// serdesphy_csr_top u_csr_top (
-	// 	.clk             (clk_ref_24m),
-	// 	.rst_n           (digital_reset_n),
-	// 	.sda             (sda),
-	// 	.scl             (scl),
-	// 	.phy_en          (phy_en),
-	// 	.iso_en          (iso_en),
-	// 	.tx_en           (tx_en),
-	// 	.tx_fifo_en      (tx_fifo_en),
-	// 	.tx_prbs_en      (tx_prbs_en),
-	// 	.tx_idle         (tx_idle),
-	// 	.rx_en           (rx_en),
-	// 	.rx_fifo_en      (rx_fifo_en),
-	// 	.rx_prbs_chk_en  (rx_prbs_chk_en),
-	// 	.rx_align_rst    (rx_align_rst),
-	// 	.tx_data_sel     (tx_data_sel),
-	// 	.rx_data_sel     (rx_data_sel),
-	// 	.vco_trim        (vco_trim),
-	// 	.cp_current      (cp_current),
-	// 	.pll_rst         (pll_rst),
-	// 	.pll_bypass      (pll_bypass),
-	// 	.cdr_gain        (cdr_gain),
-	// 	.cdr_fast_lock   (cdr_fast_lock),
-	// 	.cdr_rst         (cdr_rst),
-	// 	.dbg_vctrl       (dbg_vctrl),
-	// 	.dbg_pd          (dbg_pd),
-	// 	.dbg_fifo        (dbg_fifo),
-	// 	.dbg_an          (dbg_ana),
-	// 	.tx_fifo_full    (tx_fifo_full),
-	// 	.tx_fifo_empty   (tx_fifo_empty),
-	// 	.tx_overflow     (tx_overflow),
-	// 	.tx_underflow    (tx_underflow),
-	// 	.tx_active       (tx_active),
-	// 	.tx_error        (tx_error),
-	// 	.rx_fifo_full    (rx_fifo_full),
-	// 	.rx_fifo_empty   (rx_fifo_empty),
-	// 	.rx_overflow     (rx_overflow),
-	// 	.rx_underflow    (rx_underflow),
-	// 	.rx_active       (rx_active),
-	// 	.rx_error        (rx_error),
-	// 	.rx_aligned      (rx_aligned),
-	// 	.pll_lock        (pll_lock),
-	// 	.cdr_lock        (cdr_lock),
-	// 	.pll_ready       (pll_ready),
-	// 	.phy_ready       (phy_ready),
-	// 	.power_good      (power_good),
-	// 	.por_active      (por_active),
-	// 	.por_complete    (por_complete),
-	// 	.prbs_err        (prbs_err),
-	// 	.pll_status      (pll_status),
-	// 	.pll_error       (pll_error),
-	// 	.csr_busy        (),
-	// 	.csr_error       (),
-	// 	.system_status    ()
-	// );
+	// Serializer control signals
+	assign serializer_enable = tx_en && !iso_en;
+	assign serializer_reset_n = rst_n_240m_tx;
+	assign serializer_clock = clk_240m_tx;
 	
-	// // Reset Synchronizer
-	// serdesphy_reset_synchronizer u_reset_sync (
-	// 	.clk_ref_24m     (clk_ref_24m),
-	// 	.rst_n_in        (digital_reset_n),
-	// 	.clk_240m_tx     (clk_240m_tx),
-	// 	.clk_240m_rx     (clk_240m_rx),
-	// 	.phy_en          (phy_en),
-	// 	.pll_rst         (pll_rst),
-	// 	.cdr_rst         (cdr_rst),
-	// 	.rst_n_24m       (rst_n_24m),
-	// 	.rst_n_240m_tx   (rst_n_240m_tx),
-	// 	.rst_n_240m_rx   (rst_n_240m_rx),
-	// 	.pll_rst_sync    (),
-	// 	.cdr_rst_sync    ()
-	// );
+	// Deserializer control signals
+	assign deserializer_enable = rx_en && !iso_en;
+	assign deserializer_reset_n = rst_n_240m_rx;
+	assign deserializer_clock = clk_240m_rx;
 	
-	// // TX Top Module
-	// serdesphy_tx_top u_tx_top (
-	// 	.clk_24m          (clk_ref_24m),
-	// 	.clk_240m_tx      (clk_240m_tx),
-	// 	.rst_n_24m        (rst_n_24m),
-	// 	.rst_n_240m_tx    (rst_n_240m_tx),
-	// 	.tx_en            (tx_en),
-	// 	.tx_fifo_en       (tx_fifo_en),
-	// 	.tx_prbs_en       (tx_prbs_en),
-	// 	.tx_idle          (tx_idle),
-	// 	.tx_data_sel      (tx_data_sel),
-	// 	.tx_data          (tx_data),
-	// 	.tx_valid         (tx_valid),
-	// 	.tx_serial_data   (tx_serial_data),
-	// 	.tx_serial_valid  (tx_serial_valid),
-	// 	.tx_idle_pattern  (tx_idle_pattern),
-	// 	.tx_fifo_full     (tx_fifo_full),
-	// 	.tx_fifo_empty    (tx_fifo_empty),
-	// 	.tx_overflow      (tx_overflow),
-	// 	.tx_underflow     (tx_underflow),
-	// 	.tx_active        (tx_active),
-	// 	.tx_error         (tx_error),
-	// 	.clk_240m_tx_en   (clk_240m_tx_en)
-	// );
+	// Connect top-level status outputs (outputs are already declared as module ports)
+	// phy_ready, tx_active, tx_error, rx_active, rx_error are already declared as ports
 	
-	// // Serializer Interface
-	// serdesphy_serializer_if u_serializer_if (
-	// 	.clk_24m          (clk_ref_24m),
-	// 	.clk_240m_tx      (clk_240m_tx),
-	// 	.rst_n_24m        (rst_n_24m),
-	// 	.rst_n_240m_tx    (rst_n_240m_tx),
-	// 	.tx_en            (tx_en),
-	// 	.serializer_bypass(test_mode),
-	// 	.tx_serial_data   (tx_serial_data),
-	// 	.tx_serial_valid  (tx_serial_valid),
-	// 	.tx_idle_pattern  (tx_idle_pattern),
-	// 	.serializer_data  (),  // To analog serializer
-	// 	.serializer_enable(),  // To analog serializer
-	// 	.serializer_clock (),  // To analog serializer
-	// 	.serializer_reset_n(), // To analog serializer
-	// 	.serializer_ready (serializer_ready),
-	// 	.serializer_error (serializer_error),
-	// 	.serializer_active(serializer_active),
-	// 	.serializer_status(serializer_status),
-	// 	.if_error         (if_error_tx)
-	// );
-	
-	// // RX Top Module
-	// serdesphy_rx_top u_rx_top (
-	// 	.clk_24m          (clk_ref_24m),
-	// 	.clk_240m_rx      (clk_240m_rx),
-	// 	.rst_n_24m        (rst_n_24m),
-	// 	.rst_n_240m_rx    (rst_n_240m_rx),
-	// 	.rx_en            (rx_en),
-	// 	.rx_fifo_en       (rx_fifo_en),
-	// 	.rx_prbs_chk_en   (rx_prbs_chk_en),
-	// 	.rx_align_rst     (rx_align_rst),
-	// 	.rx_data_sel      (rx_data_sel),
-	// 	.rx_serial_data   (rx_serial_data),
-	// 	.rx_serial_valid  (rx_serial_valid),
-	// 	.rx_serial_error  (rx_serial_error),
-	// 	.rx_data          (rx_data),
-	// 	.rx_valid         (rx_valid),
-	// 	.rx_fifo_full     (rx_fifo_full),
-	// 	.rx_fifo_empty    (rx_fifo_empty),
-	// 	.rx_overflow      (rx_overflow),
-	// 	.rx_underflow     (rx_underflow),
-	// 	.rx_active        (rx_active),
-	// 	.rx_error         (rx_error),
-	// 	.rx_aligned       (rx_aligned),
-	// 	.clk_240m_rx_en   (clk_240m_rx_en)
-	// );
-	
-	// // Deserializer Interface
-	// serdesphy_deserializer_if u_deserializer_if (
-	// 	.clk_24m          (clk_ref_24m),
-	// 	.clk_240m_rx      (clk_240m_rx),
-	// 	.rst_n_24m        (rst_n_24m),
-	// 	.rst_n_240m_rx    (rst_n_240m_rx),
-	// 	.rx_en            (rx_en),
-	// 	.deserializer_bypass(test_mode),
-	// 	.deserializer_data(),  // From analog deserializer
-	// 	.deserializer_enable(), // To analog deserializer
-	// 	.deserializer_clock (), // To analog deserializer
-	// 	.deserializer_reset_n(), // To analog deserializer
-	// 	.deserializer_ready(deserializer_ready),
-	// 	.deserializer_lock (deserializer_lock),
-	// 	.deserializer_error(deserializer_error),
-	// 	.rx_serial_data   (rx_serial_data),
-	// 	.rx_serial_valid  (rx_serial_valid),
-	// 	.rx_serial_error  (rx_serial_error),
-	// 	.deserializer_active(deserializer_active),
-	// 	.deserializer_status(deserializer_status),
-	// 	.if_error         (if_error_rx)
-	// );
-	
-	// // Legacy analog clock enable (for compatibility)
-	// serdesphy_ana_clk_enable u_ana_clk_enable(
-	// 	.clk  (clk_ref_24m),    
-	// 	.CE   (pll_lock)
-	// );
+	// Physical Coding Sublayer
+	serdesphy_pcs u_pcs (
+		// Clock and Reset
+		.clk_ref_24m        (clk_ref_24m),
+		.rst_n              (rst_n),
+		.phy_en             (phy_en),
+		.iso_en             (iso_en),
+
+		// Power On Reset
+		.dvdd_ok(dvdd_ok),
+		.avdd_ok(avdd_ok),
+		
+		// Clock domains
+		.clk_240m_tx        (clk_240m_tx),
+		.clk_240m_rx        (clk_240m_rx),
+		.rst_n_24m          (rst_n_24m),
+		.rst_n_240m_tx      (rst_n_240m_tx),
+		.rst_n_240m_rx      (rst_n_240m_rx),
+		
+		// Clock enables
+		.clk_24m_en         (clk_24m_en),
+		.clk_240m_tx_en     (clk_240m_tx_en),
+		.clk_240m_rx_en     (clk_240m_rx_en),
+		
+		// CSR Interface - I2C
+		.sda                (sda),
+		.scl                (scl),
+		
+		// CSR Interface - TX Controls
+		.tx_en              (tx_en),
+		.tx_fifo_en         (tx_fifo_en),
+		.tx_prbs_en         (tx_prbs_en),
+		.tx_idle            (tx_idle),
+		.tx_data_sel        (tx_data_sel),
+		
+		// CSR Interface - RX Controls
+		.rx_en              (rx_en),
+		.rx_fifo_en         (rx_fifo_en),
+		.rx_prbs_chk_en     (rx_prbs_chk_en),
+		.rx_align_rst       (rx_align_rst),
+		.rx_data_sel        (rx_data_sel),
+		
+		// CSR Interface - PLL Controls
+		.vco_trim           (vco_trim),
+		.cp_current         (cp_current),
+		.pll_rst            (pll_rst),
+		.pll_bypass         (pll_bypass),
+		
+		// CSR Interface - CDR Controls
+		.cdr_gain           (cdr_gain),
+		.cdr_fast_lock      (cdr_fast_lock),
+		.cdr_rst            (cdr_rst),
+		
+		// CSR Interface - Debug
+		.dbg_vctrl          (dbg_vctrl),
+		.dbg_pd             (dbg_pd),
+		.dbg_fifo           (dbg_fifo),
+		
+		// TX Data Interface
+		.tx_data            (tx_data),
+		.tx_valid           (tx_valid),
+		
+		// TX Serial Interface to PMA
+		.tx_serial_data     (tx_serial_data),
+		.tx_serial_valid    (tx_serial_valid),
+		.tx_idle_pattern    (tx_idle_pattern),
+		
+		// RX Serial Interface from PMA
+		.rx_serial_data     (rx_serial_data),
+		.rx_serial_valid    (rx_serial_valid),
+		.rx_serial_error    (rx_serial_error),
+		
+		// RX Data Interface
+		.rx_data            (rx_data),
+		.rx_valid           (rx_valid),
+		
+		// Power-on-Reset Status
+		.power_good         (power_good),
+		.por_active         (por_active),
+		.por_complete       (por_complete),
+		
+		// PLL Status
+		.pll_lock           (pll_lock),
+		.pll_ready          (pll_ready),
+		.pll_status         (pll_status),
+		.pll_error          (pll_error),
+		
+		// CDR Status
+		.cdr_lock           (cdr_lock),
+		
+		// TX Status
+		.tx_fifo_full       (tx_fifo_full),
+		.tx_fifo_empty      (tx_fifo_empty),
+		.tx_overflow        (tx_overflow),
+		.tx_underflow       (tx_underflow),
+		.tx_active          (tx_active),
+		.tx_error           (tx_error),
+		
+		// RX Status
+		.rx_fifo_full       (rx_fifo_full),
+		.rx_fifo_empty      (rx_fifo_empty),
+		.rx_overflow        (rx_overflow),
+		.rx_underflow       (rx_underflow),
+		.rx_active          (rx_active),
+		.rx_error           (rx_error),
+		.rx_aligned         (rx_aligned),
+		
+		// Serializer Interface Status (from PMA)
+		.serializer_ready   (serializer_ready),
+		.serializer_error   (serializer_error),
+		.serializer_active  (serializer_active),
+		.serializer_status  (serializer_status),
+		
+		// Deserializer Interface Status (from PMA)
+		.deserializer_ready (deserializer_ready),
+		.deserializer_lock  (deserializer_lock),
+		.deserializer_error (deserializer_error),
+		.deserializer_active(deserializer_active),
+		.deserializer_status(deserializer_status),
+		
+		// PRBS Error
+		.prbs_err           (prbs_err),
+		
+		// Debug Output
+		.dbg_ana            (dbg_ana)
+	);
+
+	// Physical Medium Attachment
+	serdesphy_pma u_pma (
+		// Clock and Reset
+		.clk_ref_24m        (clk_ref_24m),
+		.rst_n              (rst_n),
+		.clk_240m_tx        (clk_240m_tx),
+		.clk_240m_rx        (clk_240m_rx),
+		
+		// Power Control
+		.analog_iso_n       (analog_iso_n),
+		.analog_reset_n     (analog_reset_n),
+		
+		// PLL Interface
+		.pll_enable         (pll_enable),
+		.pll_reset_n        (pll_reset_n),
+		.pll_bypass_en      (pll_bypass_en),
+		.pll_vco_trim       (vco_trim),
+		.pll_cp_current     (cp_current),
+		.pll_iso_n          (pll_iso_n),
+		
+		// PLL Status
+		.pll_lock_raw       (pll_lock_raw),
+		.pll_vco_ok         (pll_vco_ok),
+		.pll_cp_ok          (pll_cp_ok),
+		
+		// TX Serializer Interface
+		.serializer_enable  (serializer_enable),
+		.serializer_clock   (serializer_clock),
+		.serializer_reset_n (serializer_reset_n),
+		.serializer_data    (tx_serial_data),
+		.serializer_bypass  (test_mode),
+		
+		// Serializer Status
+		.serializer_ready   (serializer_ready),
+		.serializer_error   (serializer_error),
+		.serializer_active  (serializer_active),
+		.serializer_status  (serializer_status),
+		
+		// RX Deserializer Interface
+		.deserializer_enable(deserializer_enable),
+		.deserializer_clock (deserializer_clock),
+		.deserializer_reset_n(deserializer_reset_n),
+		.deserializer_bypass(test_mode),
+		
+		// Deserializer Status
+		.deserializer_ready (deserializer_ready),
+		.deserializer_lock  (deserializer_lock),
+		.deserializer_error (deserializer_error),
+		.deserializer_active(deserializer_active),
+		.deserializer_status(deserializer_status),
+		.deserializer_data  (deserializer_data),
+		
+		// Differential TX Outputs
+		.txp                (txp),
+		.txn                (txn),
+		
+		// Differential RX Inputs
+		.rxp                (rxp),
+		.rxn                (rxn),
+		
+		// Loopback Control
+		.lpbk_en            (lpbk_en),
+		
+		// Debug Interface
+		.dbg_ana            (dbg_ana)
+	);
+
 	
 endmodule

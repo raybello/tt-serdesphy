@@ -69,11 +69,16 @@ module tt_um_raybello_serdesphy_top (
     // Configuration
     .test_mode  (ui_in[7]),     // Test mode enable
     .lpbk_en    (uio_in[6]),    // Analog loopback enable
-    .dbg_ana     (uio_out[7])    // Analog debug buffer
+    .dbg_ana     (uio_out[7]),   // Analog debug buffer
+    
+    // Power Monitoring
+    .dvdd_ok    (ena),          // 1.8V digital supply OK
+    .avdd_ok    (ena)           // 3.3V analog supply OK
+
   );
 
 
   // List all unused inputs to prevent warnings
-  wire _unused = &{ena, clk, rst_n, 1'b0};
+  wire _unused = &{clk, rst_n, 1'b0};
 
 endmodule
