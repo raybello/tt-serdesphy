@@ -30,7 +30,7 @@ The SKY130 SerDes PHY is a single-lane serial transceiver implementing Mancheste
 
 ## 2\. FUNCTIONAL BLOCK DIAGRAM
 
-![tt_serdesphy.drawio(1).svg](https://uploads.linear.app/39b2ed47-ba04-46e5-940b-5995225abcc4/6b94c2e6-c123-4589-9494-33269ffdb98d/b45fa655-ade7-4663-a41b-b69130ae6918)
+![System Overview](./docs/arch.svg)
 
 ---
 
