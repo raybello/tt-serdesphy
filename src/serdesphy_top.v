@@ -127,9 +127,9 @@ module serdesphy_top(
 	wire deserializer_status;
 	
 	// Analog interface signals (simplified models)
-	wire pll_lock_raw = 1'b1;
-	wire pll_vco_ok = 1'b1;
-	wire pll_cp_ok = 1'b1;
+	wire pll_lock_raw;
+	wire pll_vco_ok;
+	wire pll_cp_ok;
 	
 	// PCS Internal Logic - Connect RX serial data from PMA
 	assign rx_serial_data = deserializer_data;
