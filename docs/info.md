@@ -408,7 +408,7 @@ START | ADDR(0x42) + R | ACK | DATA | NACK | STOP
  4. Write 0x00 to PLL_CONFIG\[6\] (release PLL reset)
  5. Poll STATUS\[0\] until PLL_LOCK asserts
  6. Write 0x05 to TX_CONFIG (enable TX with PRBS)
- 7. Write 0x01 to DATA_SELECT (select PRBS source)
+ 7. Write 0x00 to DATA_SELECT (select PRBS source)
  8. Write 0x00 to CDR_CONFIG\[4\] (release CDR reset)
  9. Write 0x05 to RX_CONFIG (enable RX with PRBS check)
 10. Poll STATUS\[1\] until CDR_LOCK asserts
@@ -440,5 +440,3 @@ START | ADDR(0x42) + R | ACK | DATA | NACK | STOP
 | Rev | Date | Description | Author |
 | -- | -- | -- | -- |
 | v0.0.1 | 17/12/25 | Initial Draft | Ray Bello |
-
-
