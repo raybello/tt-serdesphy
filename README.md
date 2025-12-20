@@ -1,5 +1,7 @@
 ![](../../workflows/gds/badge.svg) ![](../../workflows/docs/badge.svg) ![](../../workflows/test/badge.svg) ![](../../workflows/fpga/badge.svg)
 
+# Architecture Specification
+
 ## 1\. DEVICE OVERVIEW
 
 The SKY130 SerDes PHY is a single-lane serial transceiver implementing Manchester-encoded differential signalling at 240 Mbps. The device integrates a transmit PLL, receive clock/data recovery circuit, dual FIFOs, and pseudorandom bit sequence (PRBS) test pattern generator/checker. Configuration and monitoring are provided through an I²C slave interface.
@@ -28,7 +30,7 @@ The SKY130 SerDes PHY is a single-lane serial transceiver implementing Mancheste
 
 ## 2\. FUNCTIONAL BLOCK DIAGRAM
 
-![tt_serdesphy.drawio(1).svg](./docs/arch.svg)
+![tt_serdesphy.drawio(1).svg](https://uploads.linear.app/39b2ed47-ba04-46e5-940b-5995225abcc4/6b94c2e6-c123-4589-9494-33269ffdb98d/b45fa655-ade7-4663-a41b-b69130ae6918)
 
 ---
 
@@ -144,7 +146,7 @@ The receive path recovers 240 Mbps differential signal and presents 4-bit parall
 3. **Deserializer:** 16-bit shift register at 240 MHz recovered clock
 4. **Manchester Decoder:** Biphase to 8-bit parallel conversion
 5. **RX FIFO:** 8-deep × 8-bit buffer with clock domain crossing
-6. **Word Disassembler:** 8-bit to dual 4- babit output over two cycles
+6. **Word Disassembler:** 8-bit to dual 4-bit output over two cycles
 
 **CDR Specifications:**
 
@@ -229,7 +231,7 @@ RX_ALIGN_RST is self-clearing and triggers a single-cycle reset pulse. RX_PRBS_C
 
 | Bit | Name | R/W | Default | Description |
 | -- | -- | -- | -- | -- |
-| 0 | TX_DATA_SEL | R/W | 1 | TX source: 0=FIFO, 1=PRBS |
+| 0 | TX_DATA_SEL | R/W | 1 | TX source: 0=PRBS, 1=FIFO |
 | 1 | RX_DATA_SEL | R/W | 0 | RX output: 0=FIFO, 1=PRBS status |
 | 7:2 | — | — | 0 | Reserved |
 
@@ -425,6 +427,14 @@ START | ADDR(0x42) + R | ACK | DATA | NACK | STOP
 | Part Number | Package | Temperature Range | Tape & Reel |
 | -- | -- | -- | -- |
 | SKY130-SERDES-240M | 24-QFN | −40°C to +85°C | 3000/reel |
+
+---
+
+## 11\. REVISION HISTORY
+
+| Rev | Date | Description | Author |
+| -- | -- | -- | -- |
+| v0.0.1 | 17/12/25 | Initial Draft | Ray Bello |
 
 
 ## Project Tracking
