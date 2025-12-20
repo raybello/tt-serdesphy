@@ -91,6 +91,7 @@ descrambling etc.
     output       pll_ready,          // PLL ready indication
     output [7:0] pll_status,         // PLL status register
     output       pll_error,          // PLL error flag
+    output       phy_ready,          // PHY ready flag
     
     // CDR Status
     output       cdr_lock,           // CDR lock indication
@@ -129,7 +130,7 @@ descrambling etc.
     output wire       prbs_err,           // PRBS error indication
     
     // Debug Output
-    output wire       dbg_ana,            // Debug analog control
+    output wire dbg_ana,            // Debug analog control
     
     // Reset Control Outputs
     output wire       analog_iso_n,       // Analog isolation control (active-low)
@@ -141,6 +142,28 @@ descrambling etc.
 	wire phy_en_r;
 
 	assign phy_en = phy_en_r;
+	
+	// Default values for status signals from modules that are not yet instantiated
+	assign tx_active = 1'b0;
+	assign tx_error = 1'b0;
+	assign rx_active = 1'b0;
+	assign rx_error = 1'b0;
+	assign tx_fifo_full = 1'b0;
+	assign tx_fifo_empty = 1'b1;
+	assign tx_overflow = 1'b0;
+	assign tx_underflow = 1'b0;
+	assign rx_fifo_full = 1'b0;
+	assign rx_fifo_empty = 1'b1;
+	assign rx_overflow = 1'b0;
+	assign rx_underflow = 1'b0;
+	assign rx_aligned = 1'b0;
+	assign pll_lock = 1'b0;
+	assign cdr_lock = 1'b0;
+	assign pll_ready = 1'b0;
+	assign phy_ready = power_good && digital_reset_n;
+	assign prbs_err = 1'b0;
+	assign pll_status = 8'h00;
+	assign pll_error = 1'b0;
 
 
     // Power-on-Reset Controller
@@ -210,55 +233,69 @@ descrambling etc.
 		.rst_n           (digital_reset_n),
 		.sda             (sda),
 		.scl             (scl),
-		.phy_en          (phy_en_r)
-		// .iso_en          (iso_en),
-		// .tx_en           (tx_en),
-		// .tx_fifo_en      (tx_fifo_en),
-		// .tx_prbs_en      (tx_prbs_en),
-		// .tx_idle         (tx_idle),
-		// .rx_en           (rx_en),
-		// .rx_fifo_en      (rx_fifo_en),
-		// .rx_prbs_chk_en  (rx_prbs_chk_en),
-		// .rx_align_rst    (rx_align_rst),
-		// .tx_data_sel     (tx_data_sel),
-		// .rx_data_sel     (rx_data_sel),
-		// .vco_trim        (vco_trim),
-		// .cp_current      (cp_current),
-		// .pll_rst         (pll_rst),
-		// .pll_bypass      (pll_bypass),
-		// .cdr_gain        (cdr_gain),
-		// .cdr_fast_lock   (cdr_fast_lock),
-		// .cdr_rst         (cdr_rst),
-		// .dbg_vctrl       (dbg_vctrl),
-		// .dbg_pd          (dbg_pd),
-		// .dbg_fifo        (dbg_fifo),
-		// .dbg_an          (dbg_ana),
-		// .tx_fifo_full    (tx_fifo_full),
-		// .tx_fifo_empty   (tx_fifo_empty),
-		// .tx_overflow     (tx_overflow),
-		// .tx_underflow    (tx_underflow),
-		// .tx_active       (tx_active),
-		// .tx_error        (tx_error),
-		// .rx_fifo_full    (rx_fifo_full),
-		// .rx_fifo_empty   (rx_fifo_empty),
-		// .rx_overflow     (rx_overflow),
-		// .rx_underflow    (rx_underflow),
-		// .rx_active       (rx_active),
-		// .rx_error        (rx_error),
-		// .rx_aligned      (rx_aligned),
-		// .pll_lock        (pll_lock),
-		// .cdr_lock        (cdr_lock),
-		// .pll_ready       (pll_ready),
-		// .phy_ready       (phy_ready),
-		// .power_good      (power_good),
-		// .por_active      (por_active),
-		// .por_complete    (por_complete),
-		// .prbs_err        (prbs_err),
-		// .pll_status      (pll_status),
-		// .pll_error       (pll_error),
-		// .csr_busy        (),
-		// .csr_error       (),
-		// .system_status    ()
+		
+		// Control outputs
+		.phy_en          (phy_en_r),
+		.iso_en          (iso_en),
+		.tx_en           (tx_en),
+		.tx_fifo_en      (tx_fifo_en),
+		.tx_prbs_en      (tx_prbs_en),
+		.tx_idle         (tx_idle),
+		.rx_en           (rx_en),
+		.rx_fifo_en      (rx_fifo_en),
+		.rx_prbs_chk_en  (rx_prbs_chk_en),
+		.rx_align_rst    (rx_align_rst),
+		.tx_data_sel     (tx_data_sel),
+		.rx_data_sel     (rx_data_sel),
+		.vco_trim        (vco_trim),
+		.cp_current      (cp_current),
+		.pll_rst         (pll_rst),
+		.pll_bypass      (pll_bypass),
+		.cdr_gain        (cdr_gain),
+		.cdr_fast_lock   (cdr_fast_lock),
+		.cdr_rst         (cdr_rst),
+		.dbg_vctrl       (dbg_vctrl),
+		.dbg_pd          (dbg_pd),
+		.dbg_fifo        (dbg_fifo),
+		.dbg_an          (dbg_ana),
+		
+		// Status inputs from TX block
+		.tx_fifo_full    (tx_fifo_full),
+		.tx_fifo_empty   (tx_fifo_empty),
+		.tx_overflow     (tx_overflow),
+		.tx_underflow    (tx_underflow),
+		.tx_active       (tx_active),
+		.tx_error        (tx_error),
+		
+		// Status inputs from RX block
+		.rx_fifo_full    (rx_fifo_full),
+		.rx_fifo_empty   (rx_fifo_empty),
+		.rx_overflow     (rx_overflow),
+		.rx_underflow    (rx_underflow),
+		.rx_active       (rx_active),
+		.rx_error        (rx_error),
+		.rx_aligned      (rx_aligned),
+		
+		// Status inputs from PLL/CDR blocks
+		.pll_lock        (pll_lock),
+		.cdr_lock        (cdr_lock),
+		.pll_ready       (pll_ready),
+		.phy_ready       (phy_ready),
+		
+		// Status inputs from POR block
+		.power_good      (power_good),
+		.por_active      (por_active),
+		.por_complete    (por_complete),
+		
+		// Status inputs from analog blocks
+		.prbs_err        (prbs_err),
+		.pll_status      (pll_status),
+		.pll_error       (pll_error),
+		
+		// Status outputs
+		.csr_busy        (),
+		.csr_error       (),
+		.system_status    ()
 	);
 	
 	

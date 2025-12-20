@@ -73,6 +73,8 @@ module serdesphy_pma(
     // TODO: instantiate mock serdesphy_ana_tx_top
     // TODO: instantiate mock serdesphy_ana_rx_top
     // TODO: instantiate mock serdesphy_ana_pll
+
+    wire analog_en;
     
     
 

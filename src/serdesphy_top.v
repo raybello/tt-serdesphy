@@ -53,37 +53,37 @@ module serdesphy_top(
 	
 	// PLL Control signals
 	wire phy_en;
-	reg iso_en = 1'b0;
-	reg [3:0] vco_trim = 4'b0000;
-	reg [1:0] cp_current = 2'b00;
-	reg pll_rst = 1'b0;
-	reg pll_bypass = 1'b0;
-	reg [2:0] cdr_gain = 3'b000;
-	reg cdr_fast_lock = 1'b0;
-	reg cdr_rst = 1'b0;
-	reg pll_ready;
-	reg [7:0] pll_status;
-	reg pll_error;
-	reg clk_24m_en = 1'b1;
-	reg clk_240m_tx_en = 1'b1;
-	reg clk_240m_rx_en = 1'b1;
+	wire iso_en;
+	wire [3:0] vco_trim;
+	wire [1:0] cp_current;
+	wire pll_rst;
+	wire pll_bypass;
+	wire [2:0] cdr_gain;
+	wire cdr_fast_lock;
+	wire cdr_rst;
+	wire pll_ready;
+	wire [7:0] pll_status;
+	wire pll_error;
+	wire clk_24m_en;
+	wire clk_240m_tx_en;
+	wire clk_240m_rx_en;
 	
 	// CSR Control signals
-	reg tx_en = 1'b1;
-	reg tx_fifo_en = 1'b1;
-	reg tx_prbs_en = 1'b0;
-	reg tx_idle = 1'b0;
-	reg rx_en = 1'b1;
-	reg rx_fifo_en = 1'b1;
-	reg rx_prbs_chk_en = 1'b0;
-	reg rx_align_rst = 1'b0;
-	reg tx_data_sel = 1'b0;
-	reg rx_data_sel = 1'b0;
+	wire tx_en;
+	wire tx_fifo_en;
+	wire tx_prbs_en;
+	wire tx_idle;
+	wire rx_en;
+	wire rx_fifo_en;
+	wire rx_prbs_chk_en;
+	wire rx_align_rst;
+	wire tx_data_sel;
+	wire rx_data_sel;
 	
 	// Debug signals
-	reg dbg_vctrl = 1'b0;
-	reg dbg_pd = 1'b0;
-	reg dbg_fifo = 1'b0;
+	wire dbg_vctrl;
+	wire dbg_pd;
+	wire dbg_fifo;
 	
 	// TX Interface signals
 	wire tx_serial_data;
@@ -150,8 +150,8 @@ module serdesphy_top(
 	assign deserializer_reset_n = rst_n_240m_rx;
 	assign deserializer_clock = clk_240m_rx;
 	
-	// Connect top-level status outputs (outputs are already declared as module ports)
-	// phy_ready, tx_active, tx_error, rx_active, rx_error are already declared as ports
+	// Connect phy_ready status output
+	// Other outputs (tx_active, tx_error, rx_active, rx_error) are already connected in PCS module
 	
 	// Physical Coding Sublayer
 	serdesphy_pcs u_pcs (
@@ -240,6 +240,9 @@ module serdesphy_top(
 		.pll_ready          (pll_ready),
 		.pll_status         (pll_status),
 		.pll_error          (pll_error),
+		
+		// PHY Ready Status
+		.phy_ready          (phy_ready),
 		
 		// CDR Status
 		.cdr_lock           (cdr_lock),

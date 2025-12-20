@@ -159,35 +159,31 @@ module serdesphy_csr_top (
         .fifo_err        (fifo_err)
     );
     
-    // Debug input multiplexing
-    wire [7:0] debug_sources;
-    // assign debug_sources = {
-    //     pll_status[7:0],     // Source 7: Detailed PLL status
-    //     1'b0,               // Source 6: Reserved
-    //     1'b0,               // Source 5: Reserved
-    //     1'b0,               // Source 4: Reserved
-    //     tx_fifo_full,        // Source 3: TX FIFO full
-    //     rx_fifo_full,        // Source 2: RX FIFO full
-    //     pll_lock,            // Source 1: PLL lock
-    //     cdr_lock             // Source 0: CDR lock
-    // };
+    // Debug signals
+    wire [7:0] debug_analog_internal;
     
-    // // Instantiate debug mux
-    // serdesphy_debug_mux u_debug_mux (
-    //     .clk           (clk),
-    //     .rst_n         (rst_n),
+    // Instantiate debug mux
+    serdesphy_debug_mux u_debug_mux (
+        .clk           (clk),
+        .rst_n         (rst_n),
         
-    //     // Debug selection control
-    //     .dbg_vctrl     (dbg_vctrl),
-    //     .dbg_pd        (dbg_pd),
-    //     .dbg_fifo      (dbg_fifo),
+        // Debug selection control
+        .dbg_vctrl     (dbg_vctrl),
+        .dbg_pd        (dbg_pd),
+        .dbg_fifo      (dbg_fifo),
         
-    //     // Debug input sources
-    //     .debug_sources (debug_sources),
+        // Debug input signals (using available status)
+        .vco_control   (pll_status),     // Use PLL status as VCO control representation
+        .phase_detector({6'b000000, cdr_lock, pll_lock}), // Create 8-bit phase detector status
+        .fifo_status   ({tx_fifo_full, tx_fifo_empty, rx_fifo_full, rx_fifo_empty, 4'b0000}), // FIFO status bits
         
-    //     // Analog debug output
-    //     .debug_analog  (dbg_an)
-    // );
+        // Analog debug output
+        .debug_analog  (debug_analog_internal)
+        
+    );
+    
+    // Use only bit 0 of debug output for 1-bit interface  
+    assign dbg_an = debug_analog_internal[0];
     
     // System status aggregation
     assign system_error = fifo_err || prbs_err || pll_error || tx_error || rx_error || i2c_error;
