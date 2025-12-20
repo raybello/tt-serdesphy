@@ -7,8 +7,6 @@ You can also include images in this folder and reference them in the markdown. E
 512 kb in size, and the combined size of all images must be less than 1 MB.
 -->
 
-# Architecture Specification
-
 ## 1\. DEVICE OVERVIEW
 
 The SKY130 SerDes PHY is a single-lane serial transceiver implementing Manchester-encoded differential signalling at 240 Mbps. The device integrates a transmit PLL, receive clock/data recovery circuit, dual FIFOs, and pseudorandom bit sequence (PRBS) test pattern generator/checker. Configuration and monitoring are provided through an I²C slave interface.
