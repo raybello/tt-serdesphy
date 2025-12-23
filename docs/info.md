@@ -384,21 +384,7 @@ START | ADDR(0x42) + R | ACK | DATA | NACK | STOP
 
 ### 8.1 Loopback Test Configuration
 
-```
-                 ┌─────────────────┐
-  24 MHz ────────┤CLK_REF    TXP/TXN├──┐
-                 │                 │  │  100Ω
-  SDA ───────────┤SDA         RXP/RXN├──┘  differential
-  SCL ───────────┤SCL              │     loop
-                 │            LPBK_EN├──── VDD (loopback enable)
-  TXD[3:0] ──────┤TXD[3:0]         │
-  TX_VALID ──────┤TX_VALID    RXD[3:0]├──── (monitor)
-                 │                 │
-  RST_N ─────────┤RST_N   PLL_LOCK ├──── (monitor)
-                 │        CDR_LOCK ├──── (monitor)
-                 │       PRBS_ERR ├──── (monitor)
-                 └─────────────────┘
-```
+![Loopback Test Circuit](./typ_ckt.svg)
 
 **Initialization Sequence:**
 
