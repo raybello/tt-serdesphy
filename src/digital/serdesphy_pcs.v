@@ -259,43 +259,18 @@ descrambling etc.
 		.dbg_fifo        (dbg_fifo),
 		.dbg_an          (dbg_ana),
 		
-		// Status inputs from TX block
+		// Status inputs (only the ones defined in CSR module)
 		.tx_fifo_full    (tx_fifo_full),
 		.tx_fifo_empty   (tx_fifo_empty),
 		.tx_overflow     (tx_overflow),
 		.tx_underflow    (tx_underflow),
-		.tx_active       (tx_active),
-		.tx_error        (tx_error),
-		
-		// Status inputs from RX block
 		.rx_fifo_full    (rx_fifo_full),
 		.rx_fifo_empty   (rx_fifo_empty),
 		.rx_overflow     (rx_overflow),
 		.rx_underflow    (rx_underflow),
-		.rx_active       (rx_active),
-		.rx_error        (rx_error),
-		.rx_aligned      (rx_aligned),
-		
-		// Status inputs from PLL/CDR blocks
 		.pll_lock        (pll_lock),
 		.cdr_lock        (cdr_lock),
-		.pll_ready       (pll_ready),
-		.phy_ready       (phy_ready),
-		
-		// Status inputs from POR block
-		.power_good      (power_good),
-		.por_active      (por_active),
-		.por_complete    (por_complete),
-		
-		// Status inputs from analog blocks
-		.prbs_err        (prbs_err),
-		.pll_status      (pll_status),
-		.pll_error       (pll_error),
-		
-		// Status outputs
-		.csr_busy        (),
-		.csr_error       (),
-		.system_status    ()
+		.prbs_err        (prbs_err)
 	);
 	
 	
