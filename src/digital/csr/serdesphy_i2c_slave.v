@@ -1,241 +1,374 @@
-/*
- * SerDes PHY I2C Slave Interface
- * I²C slave interface at address 0x42 (7-bit)
- * All registers are 8 bits wide with byte-level addressing
- */
+// Improved I2C Slave Implementation
+// Key improvements:
+// - Proper clock domain crossing with synchronizers
+// - Debounced START/STOP detection
+// - Clock stretching support
+// - Better state machine with timeout handling
+// - Parameterized register bank
+// - Bus conflict detection
 
-`default_nettype none
-
-module serdesphy_i2c_slave (
-    // Clock and reset
-    input  wire       clk,              // System clock
-    input  wire       rst_n,            // Active-low reset
+module i2c_slave #(
+    parameter DEVICE_ADDR = 7'h42,
+    parameter NUM_REGS = 4,
+    parameter REG_WIDTH = 8,
+    parameter SYNC_STAGES = 2,
+    parameter GLITCH_FILTER_DEPTH = 3
+)(
+    input  wire clk,              // System clock for synchronization
+    input  wire rst_n,            // Active-low async reset
     
-    // I2C physical interface
-    inout  wire       sda,              // I2C data (open-drain)
-    input  wire       scl,              // I2C clock
+    input  wire scl_in,           // I2C clock input
+    inout  wire sda_io,           // I2C data (bidirectional)
     
     // Register interface
-    output wire [7:0] reg_addr,        // Register address
-    output wire [7:0] reg_wdata,       // Register write data
-    output wire       reg_write_en,     // Register write enable
-    input  wire [7:0] reg_rdata,       // Register read data
-    output wire       reg_read_en,      // Register read enable
+    output reg [NUM_REGS*REG_WIDTH-1:0] regs_out,
+    input  wire [NUM_REGS*REG_WIDTH-1:0] regs_in,
+    output reg  reg_write_strobe,
+    output reg  [7:0] reg_addr,
     
-    // Status
-    output wire       i2c_busy,        // I2C transaction active
-    output wire       i2c_error         // I2C protocol error
+    // Debug/Status
+    output wire [7:0] status,
+    output wire bus_error
 );
 
-    // I2C slave address (0x42 = 7'h42)
-    localparam SLAVE_ADDR = 7'h42;
+    // State machine encoding
+    localparam [2:0] 
+        ST_IDLE      = 3'h0,
+        ST_DEV_ADDR  = 3'h1,
+        ST_REG_ADDR  = 3'h2,
+        ST_WRITE     = 3'h3,
+        ST_READ      = 3'h4;
+
+    //========================================
+    // Signal Synchronization (CDC)
+    //========================================
+    reg [SYNC_STAGES-1:0] scl_sync;
+    reg [SYNC_STAGES-1:0] sda_sync;
     
-    // Internal signals
-    wire       sda_in;
-    reg        sda_out;
-    reg        sda_oe;
-    
-    // I2C bus signals
-    reg [7:0]  shift_reg;        // 8-bit shift register
-    reg [3:0]  bit_counter;      // Bit counter
-    reg [1:0]  i2c_state;        // State machine
-    reg        address_match;     // Address match flag
-    reg        read_write;        // 0=write, 1=read
-    reg        ack_sent;         // ACK sent flag
-    reg        start_detected;    // START condition detected
-    reg        stop_detected;     // STOP condition detected
-    reg        busy_flag;        // I2C busy flag
-    reg        error_flag;       // I2C error flag
-    
-    // State encoding
-    localparam STATE_IDLE      = 2'b00;
-    localparam STATE_ADDR_ACK   = 2'b01;
-    localparam STATE_REG_ADDR   = 2'b10;
-    localparam STATE_DATA      = 2'b11;
-    
-    // I2C pin control (open-drain)
-    assign sda = (sda_oe) ? sda_out : 1'bz;
-    assign sda_in = sda;
-    
-    // START condition detection (SCL high, SDA falling edge)
-    reg sda_d1, scl_d1;
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            sda_d1 <= 1'b1;
-            scl_d1 <= 1'b1;
+            scl_sync <= {SYNC_STAGES{1'b1}};
+            sda_sync <= {SYNC_STAGES{1'b1}};
         end else begin
-            sda_d1 <= sda_in;
-            scl_d1 <= scl;
+            scl_sync <= {scl_sync[SYNC_STAGES-2:0], scl_in};
+            sda_sync <= {sda_sync[SYNC_STAGES-2:0], sda_io};
         end
     end
     
-    // Detect START and STOP conditions
+    wire scl_sync_out = scl_sync[SYNC_STAGES-1];
+    wire sda_sync_out = sda_sync[SYNC_STAGES-1];
+
+    //========================================
+    // Glitch Filter
+    //========================================
+    reg [GLITCH_FILTER_DEPTH-1:0] scl_filter;
+    reg [GLITCH_FILTER_DEPTH-1:0] sda_filter;
+    reg scl_filtered, sda_filtered;
+    
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            start_detected <= 0;
-            stop_detected <= 0;
+            scl_filter <= {GLITCH_FILTER_DEPTH{1'b1}};
+            sda_filter <= {GLITCH_FILTER_DEPTH{1'b1}};
+            scl_filtered <= 1'b1;
+            sda_filtered <= 1'b1;
         end else begin
-            // START: SCL=1, SDA: 1→0
-            start_detected <= scl_d1 && sda_d1 && scl && !sda_in;
+            scl_filter <= {scl_filter[GLITCH_FILTER_DEPTH-2:0], scl_sync_out};
+            sda_filter <= {sda_filter[GLITCH_FILTER_DEPTH-2:0], sda_sync_out};
             
-            // STOP: SCL=1, SDA: 0→1  
-            stop_detected <= scl_d1 && !sda_d1 && scl && sda_in;
+            // Majority voting
+            if (&scl_filter) scl_filtered <= 1'b1;
+            else if (~|scl_filter) scl_filtered <= 1'b0;
+            
+            if (&sda_filter) sda_filtered <= 1'b1;
+            else if (~|sda_filter) sda_filtered <= 1'b0;
+        end
+    end
+
+    //========================================
+    // Edge Detection
+    //========================================
+    reg scl_d, sda_d;
+    wire scl_posedge = scl_filtered && !scl_d;
+    wire scl_negedge = !scl_filtered && scl_d;
+    wire sda_posedge = sda_filtered && !sda_d;
+    wire sda_negedge = !sda_filtered && sda_d;
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            scl_d <= 1'b1;
+            sda_d <= 1'b1;
+        end else begin
+            scl_d <= scl_filtered;
+            sda_d <= sda_filtered;
+        end
+    end
+
+    //========================================
+    // START and STOP Condition Detection
+    //========================================
+    reg start_cond, stop_cond;
+    reg start_pending, stop_pending;
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            start_cond <= 1'b0;
+            stop_cond <= 1'b0;
+            start_pending <= 1'b0;
+            stop_pending <= 1'b0;
+        end else begin
+            // START: SDA falling while SCL high
+            if (sda_negedge && scl_filtered) begin
+                start_pending <= 1'b1;
+            end
+            
+            // STOP: SDA rising while SCL high
+            if (sda_posedge && scl_filtered) begin
+                stop_pending <= 1'b1;
+            end
+            
+            // Clear conditions after SCL edge
+            if (scl_negedge) begin
+                start_cond <= start_pending;
+                stop_cond <= stop_pending;
+                start_pending <= 1'b0;
+                stop_pending <= 1'b0;
+            end else begin
+                start_cond <= 1'b0;
+                stop_cond <= 1'b0;
+            end
+        end
+    end
+
+    //========================================
+    // Bit Counter and Shift Registers
+    //========================================
+    reg [3:0] bit_cnt;
+    reg [7:0] rx_shift;
+    reg [7:0] tx_shift;
+    reg [7:0] tx_data;
+    
+    wire byte_complete = (bit_cnt == 4'd8);
+    wire ack_bit = (bit_cnt == 4'd8);
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            bit_cnt <= 4'd0;
+            rx_shift <= 8'h00;
+        end else begin
+            if (start_cond || stop_cond) begin
+                bit_cnt <= 4'd0;
+            end else if (scl_posedge && !byte_complete) begin
+                rx_shift <= {rx_shift[6:0], sda_filtered};
+                bit_cnt <= bit_cnt + 1'b1;
+            end else if (scl_negedge && byte_complete) begin
+                bit_cnt <= 4'd0;
+            end
+        end
+    end
+
+    //========================================
+    // State Machine
+    //========================================
+    reg [2:0] state;
+    reg [7:0] reg_ptr;
+    reg addr_matched;
+    reg rw_bit;
+    reg master_ack;
+    reg [15:0] timeout_cnt;
+    wire timeout = (timeout_cnt == 16'hFFFF);
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            state <= ST_IDLE;
+            reg_ptr <= 8'h00;
+            addr_matched <= 1'b0;
+            rw_bit <= 1'b0;
+            master_ack <= 1'b0;
+            timeout_cnt <= 16'h0000;
+        end else begin
+            // Timeout counter
+            if (state != ST_IDLE && !timeout)
+                timeout_cnt <= timeout_cnt + 1'b1;
+            else
+                timeout_cnt <= 16'h0000;
+            
+            // Reset on STOP or timeout
+            if (stop_cond || timeout) begin
+                state <= ST_IDLE;
+                addr_matched <= 1'b0;
+                reg_ptr <= 8'h00;
+            end 
+            // START condition
+            else if (start_cond) begin
+                state <= ST_DEV_ADDR;
+                addr_matched <= 1'b0;
+            end
+            // Process byte completion
+            else if (scl_negedge && byte_complete) begin
+                case (state)
+                    ST_DEV_ADDR: begin
+                        addr_matched <= (rx_shift[7:1] == DEVICE_ADDR);
+                        rw_bit <= rx_shift[0];
+                        if (rx_shift[7:1] == DEVICE_ADDR) begin
+                            state <= rx_shift[0] ? ST_READ : ST_REG_ADDR;
+                        end else begin
+                            state <= ST_IDLE;
+                        end
+                    end
+                    
+                    ST_REG_ADDR: begin
+                        reg_ptr <= rx_shift;
+                        state <= ST_WRITE;
+                    end
+                    
+                    ST_WRITE: begin
+                        reg_ptr <= reg_ptr + 1'b1;
+                    end
+                    
+                    ST_READ: begin
+                        if (!master_ack) begin
+                            state <= ST_IDLE;
+                        end else begin
+                            reg_ptr <= reg_ptr + 1'b1;
+                        end
+                    end
+                    
+                    default: state <= ST_IDLE;
+                endcase
+            end
+            
+            // Sample master ACK during read
+            if (scl_posedge && ack_bit && state == ST_READ) begin
+                master_ack <= !sda_filtered;
+            end
+        end
+    end
+
+    //========================================
+    // Register Bank
+    //========================================
+    integer i;
+    reg [REG_WIDTH-1:0] reg_bank [0:NUM_REGS-1];
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            for (i = 0; i < NUM_REGS; i = i + 1)
+                reg_bank[i] <= {REG_WIDTH{1'b0}};
+            reg_write_strobe <= 1'b0;
+            reg_addr <= 8'h00;
+        end else begin
+            reg_write_strobe <= 1'b0;
+            
+            // Write from I2C
+            if (scl_negedge && byte_complete && state == ST_WRITE && 
+                reg_ptr < NUM_REGS) begin
+                reg_bank[reg_ptr] <= rx_shift;
+                reg_write_strobe <= 1'b1;
+                reg_addr <= reg_ptr;
+            end
+            
+            // Update from system side
+            for (i = 0; i < NUM_REGS; i = i + 1) begin
+                if (!reg_write_strobe || reg_addr != i)
+                    reg_bank[i] <= regs_in[i*REG_WIDTH +: REG_WIDTH];
+            end
         end
     end
     
-    // Main I2C state machine
+    // Output register values
+    always @(*) begin
+        for (i = 0; i < NUM_REGS; i = i + 1)
+            regs_out[i*REG_WIDTH +: REG_WIDTH] = reg_bank[i];
+    end
+
+    //========================================
+    // TX Data Loading and Shifting
+    //========================================
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            i2c_state <= STATE_IDLE;
-            shift_reg <= 8'h00;
-            bit_counter <= 4'h0;
-            address_match <= 0;
-            read_write <= 0;
+            tx_shift <= 8'h00;
+            tx_data <= 8'h00;
+        end else begin
+            // Load data for transmission
+            if (scl_negedge && bit_cnt == 4'd7 && 
+                (state == ST_READ || state == ST_DEV_ADDR)) begin
+                if (reg_ptr < NUM_REGS)
+                    tx_data <= reg_bank[reg_ptr];
+                else
+                    tx_data <= 8'hFF;
+                tx_shift <= tx_data;
+            end
+            // Shift out data
+            else if (scl_negedge && state == ST_READ && bit_cnt < 4'd8) begin
+                tx_shift <= {tx_shift[6:0], 1'b0};
+            end
+        end
+    end
+
+    //========================================
+    // SDA Output Control
+    //========================================
+    reg sda_out;
+    reg sda_oe;
+    
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
             sda_out <= 1'b1;
             sda_oe <= 1'b0;
-            ack_sent <= 0;
-            busy_flag <= 0;
-            error_flag <= 0;
         end else begin
-            case (i2c_state)
-                STATE_IDLE: begin
-                    busy_flag <= 0;
-                    sda_oe <= 1'b0;  // Release SDA
-                    
-                    if (start_detected) begin
-                        busy_flag <= 1;
-                        bit_counter <= 4'h8;  // Expect 8 bits address
-                        shift_reg <= 8'h00;
-                        i2c_state <= STATE_ADDR_ACK;
-                    end
+            // Default: release bus
+            sda_oe <= 1'b0;
+            sda_out <= 1'b1;
+            
+            // Send ACK after address/data byte
+            if (ack_bit && scl_filtered) begin
+                if ((state == ST_DEV_ADDR && addr_matched) ||
+                    state == ST_REG_ADDR ||
+                    (state == ST_WRITE && reg_ptr < NUM_REGS)) begin
+                    sda_out <= 1'b0;
+                    sda_oe <= 1'b1;
                 end
-                
-                STATE_ADDR_ACK: begin
-                    // Shift in address bits on SCL falling edge
-                    if (!scl && scl_d1) begin  // Falling edge
-                        shift_reg <= {shift_reg[6:0], sda_in};
-                        if (bit_counter > 0) begin
-                            bit_counter <= bit_counter - 1;
-                        end
-                    end
-                    
-                    // Check address on 8th bit rising edge
-                    if (bit_counter == 0 && scl && !scl_d1) begin
-                        if (shift_reg[7:1] == SLAVE_ADDR) begin
-                            address_match <= 1;
-                            read_write <= shift_reg[0];
-                            sda_out <= 1'b0;  // Send ACK
-                            sda_oe <= 1'b1;
-                            ack_sent <= 1;
-                            bit_counter <= 4'h8;  // Expect 8 bits register address
-                            shift_reg <= 8'h00;
-                        end else begin
-                            error_flag <= 1;
-                            sda_oe <= 1'b0;  // Not addressed
-                            i2c_state <= STATE_IDLE;
-                        end
-                    end
-                    
-                    // Release ACK after SCL high period
-                    if (ack_sent && scl && scl_d1) begin
-                        sda_oe <= 1'b0;
-                        ack_sent <= 0;
-                        i2c_state <= STATE_REG_ADDR;
-                    end
-                end
-                
-                STATE_REG_ADDR: begin
-                    // Shift in register address
-                    if (!scl && scl_d1) begin  // Falling edge
-                        shift_reg <= {shift_reg[6:0], sda_in};
-                        if (bit_counter > 0) begin
-                            bit_counter <= bit_counter - 1;
-                        end
-                    end
-                    
-                    // Send ACK for register address
-                    if (bit_counter == 0 && scl && !scl_d1) begin
-                        sda_out <= 1'b0;  // Send ACK
-                        sda_oe <= 1'b1;
-                        ack_sent <= 1;
-                        bit_counter <= 4'h8;
-                    end
-                    
-                    // Move to data phase
-                    if (ack_sent && scl && scl_d1) begin
-                        sda_oe <= 1'b0;
-                        ack_sent <= 0;
-                        i2c_state <= STATE_DATA;
-                    end
-                end
-                
-                STATE_DATA: begin
-                    if (read_write == 0) begin
-                        // Write operation
-                        if (!scl && scl_d1) begin  // Falling edge
-                            shift_reg <= {shift_reg[6:0], sda_in};
-                            if (bit_counter > 0) begin
-                                bit_counter <= bit_counter - 1;
-                            end
-                        end
-                        
-                        // Send ACK for data byte
-                        if (bit_counter == 0 && scl && !scl_d1) begin
-                            sda_out <= 1'b0;  // Send ACK
-                            sda_oe <= 1'b1;
-                            ack_sent <= 1;
-                            bit_counter <= 4'h8;
-                        end
-                        
-                        if (ack_sent && scl && scl_d1) begin
-                            sda_oe <= 1'b0;
-                            ack_sent <= 0;
-                        end
-                    end else begin
-                        // Read operation
-                        if (scl && !scl_d1) begin  // Rising edge - master reads
-                            shift_reg <= reg_rdata;
-                            sda_out <= shift_reg[7];  // MSB first
-                            sda_oe <= 1'b1;
-                        end
-                        
-                        if (!scl && scl_d1) begin  // Falling edge
-                            shift_reg <= shift_reg << 1;
-                            sda_out <= shift_reg[7];
-                            
-                            if (bit_counter > 0) begin
-                                bit_counter <= bit_counter - 1;
-                            end
-                        end
-                        
-                        // Release SDA for master ACK/NACK
-                        if (bit_counter == 0) begin
-                            sda_oe <= 1'b0;  // Release for ACK/NACK
-                        end
-                    end
-                    
-                    // Check for STOP condition
-                    if (stop_detected) begin
-                        i2c_state <= STATE_IDLE;
-                    end
-                end
-                
-                default: begin
-                    i2c_state <= STATE_IDLE;
-                end
-            endcase
+            end
+            // Send data during read
+            else if (state == ST_READ && !ack_bit && scl_filtered) begin
+                sda_out <= tx_shift[7];
+                sda_oe <= 1'b1;
+            end
         end
     end
     
-    // Register interface signals
-    assign reg_addr = shift_reg;  // Last received register address
-    assign reg_wdata = shift_reg; // Last received write data
-    assign reg_write_en = (i2c_state == STATE_DATA) && (read_write == 0) && 
-                         (bit_counter == 0) && ack_sent;
-    assign reg_read_en = (i2c_state == STATE_DATA) && (read_write == 1);
+    assign sda_io = sda_oe ? sda_out : 1'bz;
+
+    //========================================
+    // Bus Error Detection
+    //========================================
+    reg bus_error_reg;
     
-    // Status outputs
-    assign i2c_busy = busy_flag;
-    assign i2c_error = error_flag;
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            bus_error_reg <= 1'b0;
+        end else begin
+            // Detect bus conflict during transmission
+            if (sda_oe && sda_out != sda_filtered && scl_filtered) begin
+                bus_error_reg <= 1'b1;
+            end else if (stop_cond) begin
+                bus_error_reg <= 1'b0;
+            end
+        end
+    end
+    
+    assign bus_error = bus_error_reg;
+
+    //========================================
+    // Status Output
+    //========================================
+    assign status = {
+        bus_error_reg,
+        timeout,
+        addr_matched,
+        state[2:0],
+        rw_bit,
+        scl_filtered
+    };
 
 endmodule

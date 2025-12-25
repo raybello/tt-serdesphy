@@ -97,90 +97,46 @@ module serdesphy_csr_top (
     wire system_error;
     
     // Instantiate I2C slave interface
-    serdesphy_i2c_slave u_i2c_slave (
-        .clk          (clk),
-        .rst_n        (rst_n),
-        .sda          (sda),
-        .scl          (scl),
-        .reg_addr     (reg_addr),
-        .reg_wdata    (reg_wdata),
-        .reg_write_en (reg_write_en),
-        .reg_rdata    (reg_rdata),
-        .reg_read_en  (reg_read_en),
-        .i2c_busy     (i2c_busy),
-        .i2c_error    (i2c_error)
-    );
+    // serdesphy_i2c_slave u_i2c_slave (
+    //     .clk          (clk),
+    //     .rst_n        (rst_n),
+    //     .sda          (sda),
+    //     .scl          (scl),
+    //     .reg_addr     (reg_addr),
+    //     .reg_wdata    (reg_wdata),
+    //     .reg_write_en (reg_write_en),
+    //     .reg_rdata    (reg_rdata),
+    //     .reg_read_en  (reg_read_en),
+    //     .i2c_busy     (i2c_busy),
+    //     .i2c_error    (i2c_error)
+    // );
     
     // FIFO error aggregation
     assign fifo_err = tx_overflow || tx_underflow || rx_overflow || rx_underflow;
     
-    // Instantiate CSR registers with enhanced status
-    serdesphy_csr_registers u_csr_registers (
-        .clk             (clk),
-        .rst_n           (rst_n),
-        .reg_addr        (reg_addr),
-        .reg_wdata       (reg_wdata),
-        .reg_write_en    (reg_write_en),
-        .reg_rdata       (reg_rdata),
-        .reg_read_en     (reg_read_en),
-        
-        // Control outputs
-        .phy_en          (phy_en),
-        .iso_en          (iso_en),
-        .tx_en           (tx_en),
-        .tx_fifo_en      (tx_fifo_en),
-        .tx_prbs_en      (tx_prbs_en),
-        .tx_idle         (tx_idle),
-        .rx_en           (rx_en),
-        .rx_fifo_en      (rx_fifo_en),
-        .rx_prbs_chk_en  (rx_prbs_chk_en),
-        .rx_align_rst    (rx_align_rst),
-        .tx_data_sel     (tx_data_sel),
-        .rx_data_sel     (rx_data_sel),
-        .vco_trim        (vco_trim),
-        .cp_current      (cp_current),
-        .pll_rst         (pll_rst),
-        .pll_bypass      (pll_bypass),
-        .cdr_gain        (cdr_gain),
-        .cdr_fast_lock   (cdr_fast_lock),
-        .cdr_rst         (cdr_rst),
-        .dbg_vctrl       (dbg_vctrl),
-        .dbg_pd          (dbg_pd),
-        .dbg_fifo        (dbg_fifo),
-        
-        // Status inputs (from original specification)
-        .pll_lock        (pll_lock),
-        .cdr_lock        (cdr_lock),
-        .tx_fifo_full    (tx_fifo_full),
-        .tx_fifo_empty   (tx_fifo_empty),
-        .rx_fifo_full    (rx_fifo_full),
-        .rx_fifo_empty   (rx_fifo_empty),
-        .prbs_err        (prbs_err),
-        .fifo_err        (fifo_err)
-    );
     
     // Debug signals
     wire [7:0] debug_analog_internal;
     
     // Instantiate debug mux
-    serdesphy_debug_mux u_debug_mux (
-        .clk           (clk),
-        .rst_n         (rst_n),
+    // serdesphy_debug_mux u_debug_mux (
+    //     .clk           (clk),
+    //     .rst_n         (rst_n),
         
-        // Debug selection control
-        .dbg_vctrl     (dbg_vctrl),
-        .dbg_pd        (dbg_pd),
-        .dbg_fifo      (dbg_fifo),
+    //     // Debug selection control
+    //     .dbg_vctrl     (dbg_vctrl),
+    //     .dbg_pd        (dbg_pd),
+    //     .dbg_fifo      (dbg_fifo),
         
-        // Debug input signals (using available status)
-        .vco_control   (pll_status),     // Use PLL status as VCO control representation
-        .phase_detector({6'b000000, cdr_lock, pll_lock}), // Create 8-bit phase detector status
-        .fifo_status   ({tx_fifo_full, tx_fifo_empty, rx_fifo_full, rx_fifo_empty, 4'b0000}), // FIFO status bits
+    //     // Debug input signals (using available status)
+    //     .vco_control   (pll_status),     // Use PLL status as VCO control representation
+    //     .phase_detector({6'b000000, cdr_lock, pll_lock}), // Create 8-bit phase detector status
+    //     .fifo_status   ({tx_fifo_full, tx_fifo_empty, rx_fifo_full, rx_fifo_empty, 4'b0000}), // FIFO status bits
         
-        // Analog debug output
-        .debug_analog  (debug_analog_internal)
+    //     // Analog debug output
+    //     .debug_analog  (debug_analog_internal)
         
-    );
+    // );
     
     // Use only bit 0 of debug output for 1-bit interface  
     assign dbg_an = debug_analog_internal[0];
