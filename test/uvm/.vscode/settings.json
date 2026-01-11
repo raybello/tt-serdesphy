@@ -1,0 +1,11 @@
+{
+    "systemverilogFormatter.commandLineArguments": "--indentation_spaces 4",
+    "editor.formatOnSave": true,
+    "editor.defaultFormatter": "bmpenuelas.systemverilog-formatter-vscode",
+    "editor.formatOnType": true,
+    "editor.formatOnPaste": true,
+    "systemverilog.disableIndexing": true,
+    "systemverilog.excludeIndexing": "lib/verilator/**",
+    "systemverilog.forceFastIndexing": true,
+    "git.ignoreLimitWarning": true
+}
