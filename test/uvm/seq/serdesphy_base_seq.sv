@@ -12,10 +12,22 @@ class serdesphy_base_seq extends uvm_sequence #(uvm_sequence_item, uvm_sequence_
         super.new(name);
     endfunction
 
-    task body();
+    virtual task body();
+        `uvm_info(get_type_name(), "SERDESPHY_BASE_SEQ BODY STARTED", UVM_LOW)
+
+        if (phy_env_cfg == null)
+            `uvm_fatal(get_type_name(), "phy_env_cfg is null")
+        if (phy_env_cfg.sys_cfg == null)
+            `uvm_fatal(get_type_name(), "phy_env_cfg.sys_cfg is null")
+        if (phy_env_cfg.sys_cfg.seqr == null)
+            `uvm_fatal(get_type_name(), "phy_env_cfg.sys_cfg.seqr is null")
+
         sys_init_sq = sys_init_seq::type_id::create("sys_init_sq");
+        `uvm_info(get_type_name(), "Starting sys_init_seq", UVM_LOW)
         sys_init_sq.start(phy_env_cfg.sys_cfg.seqr);
+        `uvm_info(get_type_name(), "sys_init_seq completed", UVM_LOW)
         #5us;
+        `uvm_info(get_type_name(), "SERDESPHY_BASE_SEQ BODY COMPLETED", UVM_LOW)
     endtask
 
 endclass

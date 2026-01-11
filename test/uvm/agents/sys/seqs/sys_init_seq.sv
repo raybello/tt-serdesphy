@@ -2,7 +2,7 @@
 `ifndef SYS_INIT_SEQ
 `define SYS_INIT_SEQ
 
-class sys_init_seq extends uvm_sequence #(uvm_sequence_item, uvm_sequence_item);
+class sys_init_seq extends uvm_sequence #(sys_trans);
     `uvm_object_utils(sys_init_seq)
 
     sys_trans txn, txn_clone;
@@ -11,10 +11,12 @@ class sys_init_seq extends uvm_sequence #(uvm_sequence_item, uvm_sequence_item);
         super.new(name);
     endfunction
 
-    task body();
-        super.body();
+    virtual task body();
+        `uvm_info(get_type_name(), "sys_init_seq body started", UVM_LOW)
         start_clk();
+        `uvm_info(get_type_name(), "start_clk completed, calling assert_reset", UVM_LOW)
         assert_reset();
+        `uvm_info(get_type_name(), "sys_init_seq body completed", UVM_LOW)
     endtask
 
     task start_clk();

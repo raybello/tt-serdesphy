@@ -16,6 +16,7 @@ class sys_driver extends uvm_driver #(sys_trans, sys_trans);
     endfunction
 
     task run_phase(uvm_phase phase);
+        `uvm_info(get_type_name(), "Driver run_phase started", UVM_LOW)
         cfg.sys_vi.pins = cfg.pins;
         get_and_drive();
     endtask
@@ -24,11 +25,20 @@ class sys_driver extends uvm_driver #(sys_trans, sys_trans);
         forever begin
             sys_trans req_item, rsp_item;
 
+            `uvm_info(get_type_name(), "Driver waiting for item...", UVM_HIGH)
             seq_item_port.get_next_item(req_item);
+            `uvm_info(get_type_name(), $sformatf("Driver got item: start_clk=%0d, assert_rst=%0d", req_item.start_clk, req_item.assert_rst), UVM_MEDIUM)
 
-            if (req_item.start_clk) start_clk;
-            if (req_item.assert_rst) assert_rst;
+            if (req_item.start_clk) begin
+                `uvm_info(get_type_name(), "Starting clock", UVM_MEDIUM)
+                start_clk();
+            end
+            if (req_item.assert_rst) begin
+                `uvm_info(get_type_name(), "Asserting reset", UVM_MEDIUM)
+                assert_rst();
+            end
             seq_item_port.item_done();
+            `uvm_info(get_type_name(), "Item done", UVM_HIGH)
         end
     endtask
 

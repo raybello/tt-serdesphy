@@ -37,12 +37,11 @@ class serdesphy_init_test extends serdesphy_base_test;
     // run_phase - starting the test
     //---------------------------------------
     task run_phase(uvm_phase phase);
-        phase.raise_objection(this);
         `uvm_info(get_type_name(), $sformatf("------ :: STARTING TEST :: ------"), UVM_LOW)
+        phase.raise_objection(this);
         super.run_phase(phase);
-        `uvm_info(get_type_name(), $sformatf("------ :: FINISHED TEST :: ------"), UVM_LOW)
         phase.drop_objection(this);
-
+        `uvm_info(get_type_name(), $sformatf("------ :: FINISHED TEST :: ------"), UVM_LOW)
     endtask : run_phase
 
 endclass : serdesphy_init_test

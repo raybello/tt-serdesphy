@@ -22,7 +22,8 @@ class serdesphy_init_csr_seq extends serdesphy_base_seq;
     // create, randomize and send the item to driver
     //---------------------------------------
 
-    task body();
+    virtual task body();
+        `uvm_info(get_type_name(), "CSR SEQ BODY STARTED", UVM_LOW)
         super.body();
         `uvm_info(get_type_name(), $sformatf("------ :: STARTING CSR INIT :: ------"), UVM_LOW)
         `uvm_info(get_type_name(), $sformatf("Writing to CSRs..."), UVM_LOW)

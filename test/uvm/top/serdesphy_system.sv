@@ -34,15 +34,6 @@ module serdesphy_system;
     );
     //----------------------------------------------------------------------------               
 
-    initial begin
-        clk = 0;
-        reset_n = 1;
-        #2 reset_n = 0;
-        #10 reset_n = 1;
-    end
-
-    always #5 clk = ~clk;
-
     //----------------------------------------------------------------------------
     initial begin
         $dumpfile("dumpfile.vcd");
@@ -54,13 +45,18 @@ module serdesphy_system;
     initial begin
         uvm_config_db#(virtual sys_if)::set(null, "*", "sys_vi", sys_if);
         uvm_config_db#(virtual serdesphy_if)::set(uvm_root::get(), "*", "dut_vif", dut_if);
-    end
-    //----------------------------------------------------------------------------
 
-    //----------------------------------------------------------------------------
-    initial begin
         run_test();
     end
+
+    initial begin
+        clk = 0;
+        reset_n = 1;
+        #2 reset_n = 0;
+        #10 reset_n = 1;
+    end
+    always #5 clk = ~clk;
+
     //----------------------------------------------------------------------------
 
 endmodule

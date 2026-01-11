@@ -49,9 +49,16 @@ UVM_WARNING lib/uvm-2017/src/base/uvm_traversal.svh(274) @ 0: reporter [UVM/COMP
 UVM_WARNING lib/uvm-2017/src/base/uvm_traversal.svh(274) @ 0: reporter [UVM/COMP/NAME] the name "seq_item_port" of the component "uvm_test_top.env.sys_agt.drv.seq_item_port" violates the uvm component name constraints
 UVM_WARNING lib/uvm-2017/src/base/uvm_traversal.svh(274) @ 0: reporter [UVM/COMP/NAME] the name "mon" of the component "uvm_test_top.env.sys_agt.mon" violates the uvm component name constraints
 UVM_WARNING lib/uvm-2017/src/base/uvm_traversal.svh(274) @ 0: reporter [UVM/COMP/NAME] the name "ap" of the component "uvm_test_top.env.sys_agt.mon.ap" violates the uvm component name constraints
-UVM_INFO tests/serdesphy_init_test.sv(41) @ 0: uvm_test_top [serdesphy_init_test] ------ :: STARTING TEST :: ------
+UVM_INFO agents/sys/sys_driver.sv(19) @ 0: uvm_test_top.env.sys_agt.drv [sys_driver] Driver run_phase started
+UVM_INFO tests/serdesphy_init_test.sv(40) @ 0: uvm_test_top [serdesphy_init_test] ------ :: STARTING TEST :: ------
 UVM_WARNING @ 0: run_objection [OBJTN_CLEAR] Object 'uvm_top' cleared objection counts for run_objection
-UVM_WARNING @ 0: uvm_test_top.env.sys_agt.cfg.seqr@@sys_init_sq [uvm_sequence_base] Body definition undefined
+UVM_INFO seq/serdesphy_init_csr_seq.sv(26) @ 0: reporter@@init_seq [serdesphy_init_csr_seq] CSR SEQ BODY STARTED
+UVM_INFO seq/serdesphy_base_seq.sv(16) @ 0: reporter@@init_seq [serdesphy_init_csr_seq] SERDESPHY_BASE_SEQ BODY STARTED
+UVM_INFO seq/serdesphy_base_seq.sv(26) @ 0: reporter@@init_seq [serdesphy_init_csr_seq] Starting sys_init_seq
+UVM_INFO agents/sys/seqs/sys_init_seq.sv(15) @ 0: uvm_test_top.env.sys_agt.cfg.seqr@@sys_init_sq [sys_init_seq] sys_init_seq body started
+UVM_INFO agents/sys/sys_driver.sv(30) @ 0: uvm_test_top.env.sys_agt.drv [sys_driver] Driver got item: start_clk=1, assert_rst=0
+UVM_INFO agents/sys/sys_driver.sv(33) @ 0: uvm_test_top.env.sys_agt.drv [sys_driver] Starting clock
+UVM_INFO agents/sys/seqs/sys_init_seq.sv(17) @ 0: uvm_test_top.env.sys_agt.cfg.seqr@@sys_init_sq [sys_init_seq] start_clk completed, calling assert_reset
 UVM_INFO tests/serdesphy_base_test.sv(76) @ 0: uvm_test_top [serdesphy_init_test] ---------------------------------------
 UVM_INFO tests/serdesphy_base_test.sv(77) @ 0: uvm_test_top [serdesphy_init_test] ----           TEST PASS           ----
 UVM_INFO tests/serdesphy_base_test.sv(78) @ 0: uvm_test_top [serdesphy_init_test] ---------------------------------------
@@ -59,8 +66,8 @@ UVM_INFO lib/uvm-2017/src/base/uvm_report_server.svh(864) @ 0: reporter [UVM/REP
 --- UVM Report Summary ---
 
 ** Report counts by severity
-UVM_INFO :    9
-UVM_WARNING :   25
+UVM_INFO :   17
+UVM_WARNING :   24
 UVM_ERROR :    0
 UVM_FATAL :    0
 ** Report counts by id
@@ -71,10 +78,12 @@ UVM_FATAL :    0
 [UVM/COMP/NAMECHECK]     1
 [UVM/RELNOTES]     1
 [UVM_TEST_TOP]     1
+[serdesphy_init_csr_seq]     3
 [serdesphy_init_test]     4
-[uvm_sequence_base]     1
+[sys_driver]     3
+[sys_init_seq]     2
 
 - lib/uvm-2017/src/base/uvm_root.svh:585: Verilog $finish
 - S i m u l a t i o n   R e p o r t: Verilator 5.045 devel
-- Verilator: $finish at 2ns; walltime 0.008 s; speed 251.572 ns/s
+- Verilator: $finish at 2ns; walltime 0.008 s; speed 248.633 ns/s
 - Verilator: cpu 0.008 s on 1 threads; alloced 11 MB
