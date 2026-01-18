@@ -1,6 +1,6 @@
 all: simulate
 
-NPROC = $(shell nproc)
+NPROC = 8
 
 # -------------------------------------
 # Testbench setup
@@ -13,7 +13,7 @@ VERILATOR := $(VERILATOR_ROOT)/bin/verilator
 endif
 
 UVM_ROOT ?=lib/uvm-2017
-UVM_TEST ?= serdesphy_init_test
+UVM_TEST ?= serdesphy_base_test
 
 # 						
 

@@ -110,8 +110,13 @@ class serdesphy_base_test extends uvm_test;
         // ))
         // else `uvm_error(tID, "Failed to find axi_vi")
 
-        env.phy_env_cfg      = this.env_config;
-        init_seq.phy_env_cfg = this.env_config;
+        env.phy_env_cfg      = env_config;
+        init_seq.phy_env_cfg = env_config;
+
+        if (!env_config.randomize()) `uvm_fatal(tID, "env_config Failed to Randomize")
+        else begin
+            `uvm_info(tID, $sformatf("%s", env_config.sys_cfg.convert2string()), UVM_LOW)
+        end
     endfunction
 
 
