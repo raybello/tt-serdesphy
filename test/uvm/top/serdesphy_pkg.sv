@@ -7,7 +7,7 @@ package serdesphy_pkg;
 
     import uvm_pkg::*;
 
-    import sys_pkg::*;
+    import sys_uvc_pkg::*;
     import serdesphy_env_pkg::*; // Import the package instead of including it
     import serdesphy_test_pkg::*;
     

@@ -1,5 +1,5 @@
 
-package sys_pkg;
+package sys_uvc_pkg;
 
     `include "uvm_macros.svh"
     import uvm_pkg::*;

@@ -82,5 +82,5 @@ UVM_FATAL :    0
 
 - lib/uvm-2017/src/base/uvm_root.svh:585: Verilog $finish
 - S i m u l a t i o n   R e p o r t: Verilator 5.045 devel
-- Verilator: $finish at 2ns; walltime 0.008 s; speed 241.167 ns/s
-- Verilator: cpu 0.008 s on 1 threads; alloced 11 MB
+- Verilator: $finish at 2ns; walltime 0.015 s; speed 137.240 ns/s
+- Verilator: cpu 0.015 s on 1 threads; alloced 11 MB

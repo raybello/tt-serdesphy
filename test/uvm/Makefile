@@ -1,73 +1,46 @@
 all: simulate
 
-NPROC = 8
+# Handle both Linux (nproc) and macOS (sysctl)
+NPROC = 8 # $(shell nproc 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 8)
 
-# -------------------------------------
-# Testbench setup
-# -------------------------------------
 VERILATOR := verilator
-VERILATOR_ROOT =lib/verilator
-
 ifdef VERILATOR_ROOT
 VERILATOR := $(VERILATOR_ROOT)/bin/verilator
 endif
+UVM_ROOT ?= lib/uvm-2017
+UVM_ROOT_ABS = $(abspath $(UVM_ROOT))
 
-UVM_ROOT ?=lib/uvm-2017
-UVM_TEST ?= serdesphy_base_test
+SIM_DIR ?= serdesphy-sim
+TOP_NAME := serdesphy
+BIN_NAME := serdesphy
+UVM_TEST ?= serdesphy_init_test
+UVM_FILES := -I$(UVM_ROOT_ABS)/src $(UVM_ROOT_ABS)/src/uvm_pkg.sv
+SERDESPHY_FILES := -f serdesphy.f
+DEFINES := -DUVM_ENABLE_DEPRECATED_API -DUVM_NO_DPI
+WARNINGS = -Wno-lint -Wno-TIMESCALEMOD -Wno-SYMRSVDWORD -Wno-CONSTRAINTIGN 
+OTHER_FLAGS := --bbox-sys --timescale-override 1ns/1ps --assert # --timing --trace
+TEMPFILE := $(shell mktemp)
 
-# 						
+# Use --cc --exe --main instead of --binary for better macOS compatibility
+$(SIM_DIR)/$(TOP_NAME).mk: $(shell find . -type f \( -name "*.sv" -o -name "*.svh" \))
+	$(VERILATOR) --cc --exe --main $(UVM_FILES) $(SERDESPHY_FILES) $(DEFINES) $(WARNINGS) $(OTHER_FLAGS) \
+		-Mdir $(SIM_DIR) --prefix $(TOP_NAME) -o $(BIN_NAME)
 
-VERILOG_DEFINE_FILES = 	${UVM_ROOT}/src/uvm.sv \
-						agents/sys/sys_pkg.sv \
-						env/serdesphy_env_pkg.sv \
-						seq/serdesphy_seq_pkg.sv \
-						tests/serdesphy_test_pkg.sv \
-						top/serdesphy_pkg.sv \
-						top/serdesphy_system.sv \
-						hdl/design.sv
-VERILOG_INCLUDE_DIRS = top hdl env agents/sys seq tests ${UVM_ROOT}/src
+$(SIM_DIR)/$(BIN_NAME): $(SIM_DIR)/$(TOP_NAME).mk
+	$(MAKE) -j $(NPROC) -C $(SIM_DIR) -f $(TOP_NAME).mk AR="/usr/bin/ar cru"
+	/usr/bin/ranlib -no_warning_for_no_symbols $(SIM_DIR)/serdesphy__ALL.a 2>/dev/null || true
+	cd $(SIM_DIR) && /usr/bin/g++  -Wl,-U,__Z15vl_time_stamp64v,-U,__Z13sc_time_stampv verilated.o verilated_dpi.o verilated_vcd_c.o verilated_timing.o verilated_random.o verilated_threads.o $$(find . -name "*.o" | grep -v "verilated" | grep -v "__ALL") -pthread -lpthread -o $(BIN_NAME) 2>/dev/null || \
+		/usr/bin/g++  -Wl,-U,__Z15vl_time_stamp64v,-U,__Z13sc_time_stampv verilated.o verilated_dpi.o verilated_vcd_c.o verilated_timing.o verilated_random.o verilated_threads.o serdesphy__ALL.a -pthread -lpthread -o $(BIN_NAME)
 
-# -------------------------------------
-# Compilation/simulation configuration
-# -------------------------------------
-SIM_NAME ?= serdesphy
-SIM_DIR ?= $(SIM_NAME)-sim
-TEMPFILE := $(UVM_TEST).log
-COMPILE_ARGS += --output-groups 8 -DUVM_NO_DPI
-COMPILE_ARGS += --prefix $(SIM_NAME) -o $(SIM_NAME)
-COMPILE_ARGS += $(addprefix +incdir+, $(VERILOG_INCLUDE_DIRS))
-EXTRA_ARGS += --timescale 1ns/1ps --error-limit 100
-WARNING_ARGS += -Wno-lint \
-	-Wno-style \
-	-Wno-SYMRSVDWORD \
-	-Wno-IGNOREDRETURN \
-	-Wno-ZERODLY
-
-# -------------------------------------
-# Make UVM test with Verilator
-# -------------------------------------
-$(SIM_DIR)/$(SIM_NAME).mk: $(wildcard hdl/*.sv)
-	$(VERILATOR) --cc --exe --main --timing --trace -Mdir $(SIM_DIR) \
-	${COMPILE_ARGS} ${EXTRA_ARGS} \
-	${VERILOG_DEFINE_FILES} \
-	${WARNING_ARGS}
-
-$(SIM_DIR)/$(SIM_NAME): $(SIM_DIR)/$(SIM_NAME).mk
-	$(MAKE) -j8 -C $(SIM_DIR) $(BUILD_ARGS) -f $(SIM_NAME).mk AR=/usr/bin/ar
-
-rerun: clean simulate
-	echo "Completed Rerun"
-	
-
-simulate: $(SIM_DIR)/$(SIM_NAME).mk $(SIM_DIR)/$(SIM_NAME)
-	$(SIM_DIR)/$(SIM_NAME) +UVM_TESTNAME=$(UVM_TEST) | tee $(TEMPFILE)
+simulate: $(SIM_DIR)/$(BIN_NAME)
+	./$(SIM_DIR)/$(BIN_NAME) +UVM_TESTNAME=$(UVM_TEST) | tee $(TEMPFILE)
 	@grep "^UVM_ERROR\\s*:\\s*0$$" $(TEMPFILE) -q
 	@grep "^UVM_FATAL\\s*:\\s*0$$" $(TEMPFILE) -q
+	@grep "^Test PASSED$$" $(TEMPFILE) -q
+
+rerun: clean simulate
 
 clean:
-	rm -rf simv*.daidir csrc
-	rm -rf csrc* simv*
 	rm -rf $(SIM_DIR)
 
-
-.PHONY: simulate clean
+.PHONY: simulate clean rerun

@@ -1,11 +1,14 @@
 
-interface serdesphy_if (
-    input logic clk,
-    reset
-);
+interface serdesphy_if;
 
     //---------------------------------------
-    //declaring the signals
+    // Misc
+    //---------------------------------------
+    wire clk;
+    wire rst_n;
+
+    //---------------------------------------
+    // declaring the signals
     //---------------------------------------
     logic [1:0] addr;
     logic wr_en;

@@ -6,7 +6,7 @@
 package serdesphy_env_pkg;
 
     import uvm_pkg::*;
-    import sys_pkg::*;
+    import sys_uvc_pkg::*;
 
     // Order
     //  transaction class

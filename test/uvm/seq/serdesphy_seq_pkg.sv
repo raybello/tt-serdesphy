@@ -7,7 +7,7 @@ package serdesphy_seq_pkg;
 
     import uvm_pkg::*;
 
-    import sys_pkg::*;
+    import sys_uvc_pkg::*;
     import serdesphy_env_pkg::*;
 
     `include "serdesphy_base_seq.sv"
