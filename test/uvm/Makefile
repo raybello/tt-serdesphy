@@ -18,7 +18,7 @@ UVM_FILES := -I$(UVM_ROOT_ABS)/src $(UVM_ROOT_ABS)/src/uvm_pkg.sv
 SERDESPHY_FILES := -f serdesphy.f
 DEFINES := -DUVM_ENABLE_DEPRECATED_API -DUVM_NO_DPI
 WARNINGS = -Wno-lint -Wno-TIMESCALEMOD -Wno-SYMRSVDWORD -Wno-CONSTRAINTIGN 
-OTHER_FLAGS := --bbox-sys --timescale-override 1ns/1ps --assert # --timing --trace
+OTHER_FLAGS := --bbox-sys --timescale-override 1ns/1ps --assert --timing --trace
 TEMPFILE := $(shell mktemp)
 
 # Use --cc --exe --main instead of --binary for better macOS compatibility
