@@ -120,6 +120,8 @@ module serdesphy_top(
 	// PMA to PCS interface signals
 	wire serializer_ready;
 	wire serializer_error;
+	wire serializer_active;
+	wire serializer_status;
 	wire deserializer_ready;
 	wire deserializer_lock;
 	wire deserializer_error;
