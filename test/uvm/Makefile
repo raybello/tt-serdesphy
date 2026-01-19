@@ -27,10 +27,7 @@ $(SIM_DIR)/$(TOP_NAME).mk: $(shell find . -type f \( -name "*.sv" -o -name "*.sv
 		-Mdir $(SIM_DIR) --prefix $(TOP_NAME) -o $(BIN_NAME)
 
 $(SIM_DIR)/$(BIN_NAME): $(SIM_DIR)/$(TOP_NAME).mk
-	$(MAKE) -j $(NPROC) -C $(SIM_DIR) -f $(TOP_NAME).mk AR="/usr/bin/ar cru"
-	/usr/bin/ranlib -no_warning_for_no_symbols $(SIM_DIR)/serdesphy__ALL.a 2>/dev/null || true
-	cd $(SIM_DIR) && /usr/bin/g++  -Wl,-U,__Z15vl_time_stamp64v,-U,__Z13sc_time_stampv verilated.o verilated_dpi.o verilated_vcd_c.o verilated_timing.o verilated_random.o verilated_threads.o $$(find . -name "*.o" | grep -v "verilated" | grep -v "__ALL") -pthread -lpthread -o $(BIN_NAME) 2>/dev/null || \
-		/usr/bin/g++  -Wl,-U,__Z15vl_time_stamp64v,-U,__Z13sc_time_stampv verilated.o verilated_dpi.o verilated_vcd_c.o verilated_timing.o verilated_random.o verilated_threads.o serdesphy__ALL.a -pthread -lpthread -o $(BIN_NAME)
+	$(MAKE) -j $(NPROC) -C $(SIM_DIR) -f $(TOP_NAME).mk AR="/usr/bin/ar"
 
 simulate: $(SIM_DIR)/$(BIN_NAME)
 	./$(SIM_DIR)/$(BIN_NAME) +UVM_TESTNAME=$(UVM_TEST) | tee $(TEMPFILE)
