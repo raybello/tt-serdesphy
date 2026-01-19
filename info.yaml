@@ -21,7 +21,6 @@ project:
     - "serdesphy_top.v"
     - "digital/serdesphy_pcs.v"
     - "digital/csr/serdesphy_csr_top.v"
-    - "digital/csr/serdesphy_csr_registers.v"
     - "digital/csr/serdesphy_i2c_slave.v"
     - "digital/por/serdesphy_por.v"
     - "digital/common/serdesphy_debug_mux.v"
