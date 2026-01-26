@@ -79,7 +79,7 @@ module serdesphy_registerInterface (
     // I2C Write - register bank update
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
-            reg_phy_enable   <= 8'h00;
+            reg_phy_enable   <= 8'h02;
             reg_tx_config    <= 8'h00;
             reg_rx_config    <= 8'h00;
             reg_data_select  <= 8'h00;
@@ -96,7 +96,7 @@ module serdesphy_registerInterface (
                 reg_write_addr   <= addr;
 
                 case (addr[2:0])
-                    3'h0: reg_phy_enable   <= dataIn;
+                    3'h0: reg_phy_enable   <= {{6{1'b0}}, dataIn[1:0]};
                     3'h1: reg_tx_config    <= dataIn;
                     3'h2: reg_rx_config    <= dataIn;
                     3'h3: reg_data_select  <= dataIn;
