@@ -38,7 +38,8 @@ module serdesphy_rx_top (
     output wire       rx_active,        // RX data path active
     output wire       rx_error,         // RX error flag
     output wire       rx_aligned,       // RX alignment achieved
-    
+    output wire       prbs_err,         // PRBS error indication
+
     // Clock domain status
     input  wire       clk_240m_rx_en    // 240MHz RX clock enable
 );
@@ -106,62 +107,68 @@ module serdesphy_rx_top (
     reg [1:0]   transition_pattern;
     reg         pattern_detected;
     
+    // Additional interface wires
+    wire        word_disassembler_ready;
+    wire        prbs_checker_busy;
+
     // Instantiate Manchester decoder
     serdesphy_manchester_decoder u_manchester_decoder (
         .clk             (clk_24m),
         .rst_n           (rst_n_24m),
-        .enable          (rx_en && rx_aligned_reg),
-        .manchester_in   (manchester_word_reg),
-        .manchester_valid(manchester_word_valid),
-        .data_out        (manchester_decoder_out),
-        .data_valid      (manchester_decoder_valid),
-        .decoder_error   (manchester_decoder_error)
+        .manchester_data (manchester_word_reg),
+        .data_valid      (manchester_word_valid && rx_en && rx_aligned_reg),
+        .decoded_data    (manchester_decoder_out),
+        .decode_valid    (manchester_decoder_valid),
+        .decode_error    (manchester_decoder_error)
     );
-    
+
     // Instantiate RX FIFO
     serdesphy_rx_fifo u_rx_fifo (
         // Write clock domain (24MHz recovered)
         .wr_clk          (clk_24m),
         .wr_rst_n        (rst_n_24m),
         .wr_enable       (rx_en && rx_fifo_en),
-        .wr_data         (manchester_data_out),
-        .wr_valid        (manchester_data_valid),
-        
+        .wr_data         (manchester_decoder_out),
+        .wr_valid        (manchester_decoder_valid),
+
         // Read clock domain (24MHz system)
         .rd_clk          (clk_24m),
         .rd_rst_n        (rst_n_24m),
         .rd_enable       (rx_en && rx_fifo_en),
         .rd_data         (rx_fifo_data_out),
         .rd_valid        (rx_fifo_rd_valid),
-        .rd_read_enable  (fifo_read_enable),
-        
+        .rd_read_enable  (word_disassembler_ready),
+
         // Status flags
         .full            (rx_fifo_full_wire),
         .empty           (rx_fifo_empty_wire),
         .overflow        (rx_fifo_overflow_wire),
         .underflow       (rx_fifo_underflow_wire)
     );
-    
+
     // Instantiate word disassembler
     serdesphy_word_disassembler u_word_disassembler (
-        .clk          (clk_24m),
-        .rst_n        (rst_n_24m),
-        .enable       (rx_en && rx_fifo_en),
-        .word_in      (rx_fifo_data_out),
-        .word_valid   (rx_fifo_rd_valid),
-        .data_out     (word_disassembler_out),
-        .data_valid   (word_disassembler_valid)
+        .clk            (clk_24m),
+        .rst_n          (rst_n_24m),
+        .rx_data_word   (rx_fifo_data_out),
+        .rx_word_valid  (rx_fifo_rd_valid && rx_en && rx_fifo_en),
+        .rx_data_nibble (word_disassembler_out),
+        .rx_valid       (word_disassembler_valid),
+        .rx_word_ready  (word_disassembler_ready)
     );
-    
+
     // Instantiate PRBS checker
     serdesphy_prbs_checker u_prbs_checker (
-        .clk          (clk_24m),
-        .rst_n        (rst_n_24m),
-        .enable       (rx_en && rx_prbs_chk_en),
-        .data_in      (manchester_decoder_out),
-        .data_valid   (manchester_decoder_valid),
-        .prbs_error   (prbs_error_wire),
-        .error_count  (prbs_error_count)
+        .clk             (clk_24m),
+        .rst_n           (rst_n_24m),
+        .enable          (rx_en && rx_prbs_chk_en),
+        .reset_counter   (rx_align_rst),
+        .reset_alignment (rx_align_rst),
+        .received_data   (manchester_decoder_out),
+        .data_valid      (manchester_decoder_valid),
+        .prbs_error      (prbs_error_wire),
+        .error_count     (prbs_error_count),
+        .checker_busy    (prbs_checker_busy)
     );
     
     // Serial input accumulation (240MHz domain)
@@ -387,5 +394,6 @@ module serdesphy_rx_top (
     assign rx_active = rx_active_reg;
     assign rx_error = rx_error_reg || manchester_error_sticky || serial_error_sticky;
     assign rx_aligned = rx_aligned_reg;
+    assign prbs_err = prbs_error_wire;
 
 endmodule

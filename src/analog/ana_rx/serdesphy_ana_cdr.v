@@ -90,9 +90,9 @@ module serdesphy_ana_cdr (
                 STATE_ACQUIRE: begin
                     // Fast acquisition mode
                     if (cdr_fast_lock) begin
-                        vco_control_reg <= phase_detector_reg + 
-                                        (phase_detector_reg - 8'h80) * 2;
-                    else begin
+                        vco_control_reg <= phase_detector_reg +
+                                        ((phase_detector_reg - 8'h80) << 1);
+                    end else begin
                         vco_control_reg <= phase_detector_reg;
                     end
                     

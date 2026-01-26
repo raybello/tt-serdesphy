@@ -135,29 +135,29 @@ module serdesphy_top(
 	wire pll_vco_ok;
 	wire pll_cp_ok;
 
+	// PMA clock outputs
+	wire clk_240m_pll;
+	wire clk_240m_cdr;
+
 	// =========================================================================
-	// Tieoffs for undriven internal wires - TODO: connect when features implemented
+	// Clock Connections from PMA
 	// =========================================================================
 
-	// TODO: Connect clk_240m_tx from PLL when analog PLL is implemented
-	assign clk_240m_tx = 1'b0;
-	// TODO: Connect clk_240m_rx from CDR when analog CDR is implemented
-	assign clk_240m_rx = 1'b0;
+	// Connect 240 MHz clocks from PMA (PLL and CDR)
+	assign clk_240m_tx = clk_240m_pll;
+	assign clk_240m_rx = clk_240m_cdr;
 
-	// TODO: Connect digital_reset_n from PCS internal logic when needed
+	// Digital reset from PCS (connected internally)
 	assign digital_reset_n = rst_n;
 
-	// TODO: Connect clk_24m_en from clock manager when implemented
-	assign clk_24m_en = 1'b1;
-	// TODO: Connect clk_240m_tx_en from clock manager when implemented
-	assign clk_240m_tx_en = 1'b0;
-	// TODO: Connect clk_240m_rx_en from clock manager when implemented
-	assign clk_240m_rx_en = 1'b0;
+	// Clock enables - active when respective clocks are stable
+	assign clk_24m_en = 1'b1;  // Reference clock always enabled
+	assign clk_240m_tx_en = pll_lock_raw;  // TX clock enabled when PLL locked
+	assign clk_240m_rx_en = deserializer_lock;  // RX clock enabled when CDR locked
 
-	// TODO: Connect rx_serial_valid from deserializer interface when implemented
-	assign rx_serial_valid = 1'b0;
-	// TODO: Connect rx_serial_error from deserializer interface when implemented
-	assign rx_serial_error = 1'b0;
+	// RX serial interface signals from deserializer
+	assign rx_serial_valid = deserializer_active;  // Valid when deserializer active
+	assign rx_serial_error = deserializer_error;   // Error from deserializer
 
 	// =========================================================================
 
@@ -325,14 +325,14 @@ module serdesphy_top(
 		// Clock and Reset
 		.clk_ref_24m        (clk_ref_24m),
 		.rst_n              (rst_n),
-		
+
 		.clk_240m_tx        (clk_240m_tx),
 		.clk_240m_rx        (clk_240m_rx),
-		
+
 		// Power Control
 		.analog_iso_n       (analog_iso_n),
 		.analog_reset_n     (analog_reset_n),
-		
+
 		// PLL Interface
 		.pll_enable         (pll_enable),
 		.pll_reset_n        (pll_reset_n),
@@ -340,31 +340,40 @@ module serdesphy_top(
 		.pll_vco_trim       (vco_trim),
 		.pll_cp_current     (cp_current),
 		.pll_iso_n          (pll_iso_n),
-		
+
 		// PLL Status
 		.pll_lock_raw       (pll_lock_raw),
 		.pll_vco_ok         (pll_vco_ok),
 		.pll_cp_ok          (pll_cp_ok),
-		
+
+		// PMA Clock Outputs
+		.clk_240m_pll       (clk_240m_pll),
+		.clk_240m_cdr       (clk_240m_cdr),
+
 		// TX Serializer Interface
 		.serializer_enable  (serializer_enable),
 		.serializer_clock   (serializer_clock),
 		.serializer_reset_n (serializer_reset_n),
 		.serializer_data    (tx_serial_data),
 		.serializer_bypass  (test_mode),
-		
+
 		// Serializer Status
 		.serializer_ready   (serializer_ready),
 		.serializer_error   (serializer_error),
 		.serializer_active  (serializer_active),
 		.serializer_status  (serializer_status),
-		
+
 		// RX Deserializer Interface
 		.deserializer_enable(deserializer_enable),
 		.deserializer_clock (deserializer_clock),
 		.deserializer_reset_n(deserializer_reset_n),
 		.deserializer_bypass(test_mode),
-		
+
+		// CDR Control
+		.cdr_gain           (cdr_gain),
+		.cdr_fast_lock      (cdr_fast_lock),
+		.cdr_rst            (cdr_rst),
+
 		// Deserializer Status
 		.deserializer_ready (deserializer_ready),
 		.deserializer_lock  (deserializer_lock),
@@ -372,18 +381,18 @@ module serdesphy_top(
 		.deserializer_active(deserializer_active),
 		.deserializer_status(deserializer_status),
 		.deserializer_data  (deserializer_data),
-		
+
 		// Differential TX Outputs
 		.txp                (txp),
 		.txn                (txn),
-		
+
 		// Differential RX Inputs
 		.rxp                (rxp),
 		.rxn                (rxn),
-		
+
 		// Loopback Control
 		.lpbk_en            (lpbk_en),
-		
+
 		// Debug Interface
 		.dbg_ana            (dbg_ana)
 	);

@@ -26,18 +26,18 @@ ANA_TX_DIR = $(ANA_DIR)/ana_tx
 PROJECT_SOURCES := $(notdir $(shell find $(SRC_DIR) -maxdepth 1 -name '*.v'))
 
 DIG_TOP_SOURCES		:= $(notdir $(shell find $(DIG_DIR)  -maxdepth 1 -name '*.v'))
-# TX_SOURCES	:= $(notdir $(shell find $(TX_DIR)  -maxdepth 1 -name '*.v'))
-# RX_SOURCES	:= $(notdir $(shell find $(RX_DIR)  -maxdepth 1 -name '*.v'))
-# PLL_SOURCES	:= $(notdir $(shell find $(PLL_DIR) -maxdepth 1 -name '*.v'))
+TX_SOURCES	:= $(notdir $(shell find $(TX_DIR)  -maxdepth 1 -name '*.v'))
+RX_SOURCES	:= $(notdir $(shell find $(RX_DIR)  -maxdepth 1 -name '*.v'))
+PLL_SOURCES	:= $(notdir $(shell find $(PLL_DIR) -maxdepth 1 -name '*.v'))
 CSR_SOURCES	:= $(notdir $(shell find $(CSR_DIR) -maxdepth 1 -name '*.v'))
 POR_SOURCES	:= $(notdir $(shell find $(POR_DIR) -maxdepth 1 -name '*.v'))
 COM_SOURCES	:= $(notdir $(shell find $(COM_DIR) -maxdepth 1 -name '*.v'))
 
 ANA_TOP_SOURCES		:= $(notdir $(shell find $(ANA_DIR)  -maxdepth 1 -name '*.v'))
-# ANA_COMMON_SOURCES := $(notdir $(shell find $(ANA_COMMON_DIR) -maxdepth 1 -name '*.v'))
-# ANA_PLL_SOURCES := $(notdir $(shell find $(ANA_PLL_DIR) -maxdepth 1 -name '*.v'))
-# ANA_RX_SOURCES := $(notdir $(shell find $(ANA_RX_DIR) -maxdepth 1 -name '*.v'))
-# ANA_TX_SOURCES := $(notdir $(shell find $(ANA_TX_DIR) -maxdepth 1 -name '*.v'))
+ANA_COMMON_SOURCES := $(notdir $(shell find $(ANA_COMMON_DIR) -maxdepth 1 -name '*.v'))
+ANA_PLL_SOURCES := $(notdir $(shell find $(ANA_PLL_DIR) -maxdepth 1 -name '*.v'))
+ANA_RX_SOURCES := $(notdir $(shell find $(ANA_RX_DIR) -maxdepth 1 -name '*.v'))
+ANA_TX_SOURCES := $(notdir $(shell find $(ANA_TX_DIR) -maxdepth 1 -name '*.v'))
 
 ifneq ($(GATES),yes)
 
@@ -46,18 +46,18 @@ SIM_BUILD				= sim_build/rtl
 VERILOG_SOURCES += $(addprefix $(SRC_DIR)/,$(PROJECT_SOURCES))
 
 VERILOG_SOURCES += $(addprefix $(DIG_DIR)/,$(DIG_TOP_SOURCES))
-# VERILOG_SOURCES += $(addprefix $(TX_DIR)/,$(TX_SOURCES))
-# VERILOG_SOURCES += $(addprefix $(RX_DIR)/,$(RX_SOURCES))
-# VERILOG_SOURCES += $(addprefix $(PLL_DIR)/,$(PLL_SOURCES))
+VERILOG_SOURCES += $(addprefix $(TX_DIR)/,$(TX_SOURCES))
+VERILOG_SOURCES += $(addprefix $(RX_DIR)/,$(RX_SOURCES))
+VERILOG_SOURCES += $(addprefix $(PLL_DIR)/,$(PLL_SOURCES))
 VERILOG_SOURCES += $(addprefix $(CSR_DIR)/,$(CSR_SOURCES))
 VERILOG_SOURCES += $(addprefix $(POR_DIR)/,$(POR_SOURCES))
 VERILOG_SOURCES += $(addprefix $(COM_DIR)/,$(COM_SOURCES))
 
 VERILOG_SOURCES += $(addprefix $(ANA_DIR)/,$(ANA_TOP_SOURCES))
-# VERILOG_SOURCES += $(addprefix $(ANA_COMMON_DIR)/,$(ANA_COMMON_SOURCES))
-# VERILOG_SOURCES += $(addprefix $(ANA_PLL_DIR)/,$(ANA_PLL_SOURCES))
-# VERILOG_SOURCES += $(addprefix $(ANA_RX_DIR)/,$(ANA_RX_SOURCES))
-# VERILOG_SOURCES += $(addprefix $(ANA_TX_DIR)/,$(ANA_TX_SOURCES))
+VERILOG_SOURCES += $(addprefix $(ANA_COMMON_DIR)/,$(ANA_COMMON_SOURCES))
+VERILOG_SOURCES += $(addprefix $(ANA_PLL_DIR)/,$(ANA_PLL_SOURCES))
+VERILOG_SOURCES += $(addprefix $(ANA_RX_DIR)/,$(ANA_RX_SOURCES))
+VERILOG_SOURCES += $(addprefix $(ANA_TX_DIR)/,$(ANA_TX_SOURCES))
 
 else
 

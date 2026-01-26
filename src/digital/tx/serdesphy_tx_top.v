@@ -100,67 +100,83 @@ module serdesphy_tx_top (
     reg         underflow_sticky;
     reg         manchester_error_sticky;
     
+    // Additional interface wires
+    wire        word_assembler_ready;
+    wire        fifo_read_valid;
+    wire        mux_fifo_ready;
+    wire        mux_prbs_ready;
+    wire        mux_output_ready;
+
     // Instantiate word assembler
     serdesphy_word_assembler u_word_assembler (
-        .clk          (clk_24m),
-        .rst_n        (rst_n_24m),
-        .enable       (tx_en && tx_fifo_en),
-        .tx_data      (tx_data),
-        .tx_valid     (tx_valid),
-        .word_out     (word_assembler_out),
-        .word_valid   (word_assembler_valid)
+        .clk            (clk_24m),
+        .rst_n          (rst_n_24m),
+        .tx_data_nibble (tx_data),
+        .tx_valid       (tx_valid && tx_en && tx_fifo_en),
+        .tx_data_word   (word_assembler_out),
+        .tx_word_valid  (word_assembler_valid),
+        .tx_word_ready  (word_assembler_ready)
     );
-    
+
     // Instantiate TX FIFO
     serdesphy_tx_fifo u_tx_fifo (
         .clk          (clk_24m),
         .rst_n        (rst_n_24m),
         .enable       (tx_en && tx_fifo_en),
         .write_enable (1'b1),
+        .read_enable  (mux_fifo_ready),
         .data_in      (word_assembler_out),
         .write_valid  (word_assembler_valid),
         .data_out     (tx_fifo_data_out),
-        .read_valid   (fifo_data_valid),
-        .read_enable  (fifo_read_en),
+        .read_valid   (fifo_read_valid),
         .full         (tx_fifo_full_wire),
         .empty        (tx_fifo_empty_wire),
         .overflow     (tx_fifo_overflow_wire),
         .underflow    (tx_fifo_underflow_wire)
     );
-    
+
     // Instantiate PRBS generator
     serdesphy_prbs_generator u_prbs_generator (
-        .clk          (clk_24m),
-        .rst_n        (rst_n_24m),
-        .enable       (tx_en && tx_prbs_en),
-        .prbs_out     (prbs_data_out),
-        .prbs_valid   (prbs_data_valid)
+        .clk           (clk_24m),
+        .rst_n         (rst_n_24m),
+        .enable        (tx_en && tx_prbs_en),
+        .reset_pattern (1'b0),
+        .prbs_data     (prbs_data_out),
+        .prbs_valid    (prbs_data_valid),
+        .prbs_ready    (mux_prbs_ready)
     );
-    
+
     // Instantiate TX data multiplexer
     serdesphy_tx_data_mux u_tx_data_mux (
         .clk          (clk_24m),
         .rst_n        (rst_n_24m),
+        .enable       (tx_en),
+        .tx_idle      (tx_idle),
+        .tx_data_sel  (tx_data_sel),
         .fifo_data    (tx_fifo_data_out),
-        .fifo_valid   (fifo_data_valid),
+        .fifo_valid   (fifo_read_valid),
+        .fifo_ready   (mux_fifo_ready),
         .prbs_data    (prbs_data_out),
         .prbs_valid   (prbs_data_valid),
-        .data_sel     (tx_data_sel),
-        .mux_data     (tx_mux_data_out),
-        .mux_valid    (tx_mux_data_valid)
+        .prbs_ready   (mux_prbs_ready),
+        .output_data  (tx_mux_data_out),
+        .output_valid (tx_mux_data_valid),
+        .output_ready (mux_output_ready)
     );
-    
+
     // Instantiate Manchester encoder
     serdesphy_manchester_encoder u_manchester_encoder (
-        .clk          (clk_24m),
-        .rst_n        (rst_n_24m),
-        .enable       (tx_en && !tx_idle),
-        .data_in      (tx_mux_data_out),
-        .data_valid   (tx_mux_data_valid),
-        .manchester_out(manchester_encoder_out),
+        .clk             (clk_24m),
+        .rst_n           (rst_n_24m),
+        .data_in         (tx_mux_data_out),
+        .data_valid      (tx_mux_data_valid),
+        .manchester_data (manchester_encoder_out),
         .manchester_valid(manchester_encoder_valid),
-        .encoder_error(manchester_encoder_error)
+        .serializer_ready(mux_output_ready)
     );
+
+    // Manchester encoder doesn't have error output - derive from valid
+    assign manchester_encoder_error = 1'b0;
     
     // TX Controller State Machine
     always @(posedge clk_24m or negedge rst_n_24m) begin

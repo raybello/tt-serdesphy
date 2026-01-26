@@ -144,39 +144,59 @@ descrambling etc.
 	wire phy_en_r;
 
 	assign phy_en = phy_en_r;
-	
-	// Default values for status signals from modules that are not yet instantiated
-	assign tx_active = 1'b0;
-	assign tx_error = 1'b0;
-	assign rx_active = 1'b0;
-	assign rx_error = 1'b0;
-	assign tx_fifo_full = 1'b0;
-	assign tx_fifo_empty = 1'b1;
-	assign tx_overflow = 1'b0;
-	assign tx_underflow = 1'b0;
-	assign rx_fifo_full = 1'b0;
-	assign rx_fifo_empty = 1'b1;
-	assign rx_overflow = 1'b0;
-	assign rx_underflow = 1'b0;
-	assign rx_aligned = 1'b0;
-	assign pll_lock = 1'b0;
-	assign cdr_lock = 1'b0;
-	assign pll_ready = 1'b0;
-	assign phy_ready = power_good && digital_reset_n;
-	assign prbs_err = 1'b0;
-	assign pll_status = 8'h00;
-	assign pll_error = 1'b0;
 
-	// TODO: Connect tx_serial_data from TX Top module when implemented
-	assign tx_serial_data = 1'b0;
-	// TODO: Connect tx_serial_valid from TX Top module when implemented
-	assign tx_serial_valid = 1'b0;
-	// TODO: Connect tx_idle_pattern from TX Top module when implemented
-	assign tx_idle_pattern = 1'b0;
-	// TODO: Connect rx_data from RX Top module when implemented
-	assign rx_data = 4'b0000;
-	// TODO: Connect rx_valid from RX Top module when implemented
-	assign rx_valid = 1'b0;
+	// Internal wires for TX module outputs
+	wire       tx_serial_data_int;
+	wire       tx_serial_valid_int;
+	wire       tx_idle_pattern_int;
+	wire       tx_fifo_full_int;
+	wire       tx_fifo_empty_int;
+	wire       tx_overflow_int;
+	wire       tx_underflow_int;
+	wire       tx_active_int;
+	wire       tx_error_int;
+
+	// Internal wires for RX module outputs
+	wire [3:0] rx_data_int;
+	wire       rx_valid_int;
+	wire       rx_fifo_full_int;
+	wire       rx_fifo_empty_int;
+	wire       rx_overflow_int;
+	wire       rx_underflow_int;
+	wire       rx_active_int;
+	wire       rx_error_int;
+	wire       rx_aligned_int;
+	wire       prbs_err_int;
+
+	// Connect internal wires to outputs
+	assign tx_serial_data = tx_serial_data_int;
+	assign tx_serial_valid = tx_serial_valid_int;
+	assign tx_idle_pattern = tx_idle_pattern_int;
+	assign tx_fifo_full = tx_fifo_full_int;
+	assign tx_fifo_empty = tx_fifo_empty_int;
+	assign tx_overflow = tx_overflow_int;
+	assign tx_underflow = tx_underflow_int;
+	assign tx_active = tx_active_int;
+	assign tx_error = tx_error_int;
+
+	assign rx_data = rx_data_int;
+	assign rx_valid = rx_valid_int;
+	assign rx_fifo_full = rx_fifo_full_int;
+	assign rx_fifo_empty = rx_fifo_empty_int;
+	assign rx_overflow = rx_overflow_int;
+	assign rx_underflow = rx_underflow_int;
+	assign rx_active = rx_active_int;
+	assign rx_error = rx_error_int;
+	assign rx_aligned = rx_aligned_int;
+	assign prbs_err = prbs_err_int;
+
+	// PLL/CDR lock status from serializer/deserializer status
+	assign pll_lock = serializer_ready;
+	assign cdr_lock = deserializer_lock;
+	assign pll_ready = serializer_ready;
+	assign phy_ready = power_good && digital_reset_n && serializer_ready;
+	assign pll_status = {4'b0000, serializer_status, serializer_active, serializer_error, serializer_ready};
+	assign pll_error = serializer_error;
 
 
     // Power-on-Reset Controller
@@ -289,30 +309,30 @@ descrambling etc.
 	);
 	
 	
-	// // TX Top Module
-	// serdesphy_tx_top u_tx (
-	// 	.clk_24m          (clk_ref_24m),
-	// 	.clk_240m_tx      (clk_240m_tx),
-	// 	.rst_n_24m        (rst_n_24m),
-	// 	.rst_n_240m_tx    (rst_n_240m_tx),
-	// 	.tx_en            (tx_en),
-	// 	.tx_fifo_en       (tx_fifo_en),
-	// 	.tx_prbs_en       (tx_prbs_en),
-	// 	.tx_idle          (tx_idle),
-	// 	.tx_data_sel      (tx_data_sel),
-	// 	.tx_data          (tx_data),
-	// 	.tx_valid         (tx_valid),
-	// 	.tx_serial_data   (tx_serial_data),
-	// 	.tx_serial_valid  (tx_serial_valid),
-	// 	.tx_idle_pattern  (tx_idle_pattern),
-	// 	.tx_fifo_full     (tx_fifo_full),
-	// 	.tx_fifo_empty    (tx_fifo_empty),
-	// 	.tx_overflow      (tx_overflow),
-	// 	.tx_underflow     (tx_underflow),
-	// 	.tx_active        (tx_active),
-	// 	.tx_error         (tx_error),
-	// 	.clk_240m_tx_en   (clk_240m_tx_en)
-	// );
+	// TX Top Module
+	serdesphy_tx_top u_tx (
+		.clk_24m          (clk_ref_24m),
+		.clk_240m_tx      (clk_240m_tx),
+		.rst_n_24m        (rst_n_24m),
+		.rst_n_240m_tx    (rst_n_240m_tx),
+		.tx_en            (tx_en),
+		.tx_fifo_en       (tx_fifo_en),
+		.tx_prbs_en       (tx_prbs_en),
+		.tx_idle          (tx_idle),
+		.tx_data_sel      (tx_data_sel),
+		.tx_data          (tx_data),
+		.tx_valid         (tx_valid),
+		.tx_serial_data   (tx_serial_data_int),
+		.tx_serial_valid  (tx_serial_valid_int),
+		.tx_idle_pattern  (tx_idle_pattern_int),
+		.tx_fifo_full     (tx_fifo_full_int),
+		.tx_fifo_empty    (tx_fifo_empty_int),
+		.tx_overflow      (tx_overflow_int),
+		.tx_underflow     (tx_underflow_int),
+		.tx_active        (tx_active_int),
+		.tx_error         (tx_error_int),
+		.clk_240m_tx_en   (clk_240m_tx_en)
+	);
 	
 	// // Serializer Interface
 	// serdesphy_serializer_if u_serializer_if (
@@ -336,31 +356,32 @@ descrambling etc.
 	// 	.if_error         (if_error_tx)
 	// );
 
-    // // RX Top Module
-	// serdesphy_rx_top u_rx (
-	// 	.clk_24m          (clk_ref_24m),
-	// 	.clk_240m_rx      (clk_240m_rx),
-	// 	.rst_n_24m        (rst_n_24m),
-	// 	.rst_n_240m_rx    (rst_n_240m_rx),
-	// 	.rx_en            (rx_en),
-	// 	.rx_fifo_en       (rx_fifo_en),
-	// 	.rx_prbs_chk_en   (rx_prbs_chk_en),
-	// 	.rx_align_rst     (rx_align_rst),
-	// 	.rx_data_sel      (rx_data_sel),
-	// 	.rx_serial_data   (rx_serial_data),
-	// 	.rx_serial_valid  (rx_serial_valid),
-	// 	.rx_serial_error  (rx_serial_error),
-	// 	.rx_data          (rx_data),
-	// 	.rx_valid         (rx_valid),
-	// 	.rx_fifo_full     (rx_fifo_full),
-	// 	.rx_fifo_empty    (rx_fifo_empty),
-	// 	.rx_overflow      (rx_overflow),
-	// 	.rx_underflow     (rx_underflow),
-	// 	.rx_active        (rx_active),
-	// 	.rx_error         (rx_error),
-	// 	.rx_aligned       (rx_aligned),
-	// 	.clk_240m_rx_en   (clk_240m_rx_en)
-	// );
+    // RX Top Module
+	serdesphy_rx_top u_rx (
+		.clk_24m          (clk_ref_24m),
+		.clk_240m_rx      (clk_240m_rx),
+		.rst_n_24m        (rst_n_24m),
+		.rst_n_240m_rx    (rst_n_240m_rx),
+		.rx_en            (rx_en),
+		.rx_fifo_en       (rx_fifo_en),
+		.rx_prbs_chk_en   (rx_prbs_chk_en),
+		.rx_align_rst     (rx_align_rst),
+		.rx_data_sel      (rx_data_sel),
+		.rx_serial_data   (rx_serial_data),
+		.rx_serial_valid  (rx_serial_valid),
+		.rx_serial_error  (rx_serial_error),
+		.rx_data          (rx_data_int),
+		.rx_valid         (rx_valid_int),
+		.rx_fifo_full     (rx_fifo_full_int),
+		.rx_fifo_empty    (rx_fifo_empty_int),
+		.rx_overflow      (rx_overflow_int),
+		.rx_underflow     (rx_underflow_int),
+		.rx_active        (rx_active_int),
+		.rx_error         (rx_error_int),
+		.rx_aligned       (rx_aligned_int),
+		.prbs_err         (prbs_err_int),
+		.clk_240m_rx_en   (clk_240m_rx_en)
+	);
 	
 	// // Deserializer Interface
 	// serdesphy_deserializer_if u_deserializer_if (
