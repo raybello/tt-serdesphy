@@ -53,27 +53,19 @@ class RegisterMap:
 
 
 class PORState:
-    """Power-On Reset state definitions"""
-    POR_RESET = 0x0
-    WAIT_SUPPLY = 0x1
-    ANALOG_ISO = 0x2
-    DIGITAL_PULSE = 0x3
-    ANALOG_PULSE = 0x4
-    RELEASE_ISO = 0x5
-    READY = 0x6
-    ERROR = 0x7
-    
+    """Power-On Reset state definitions (simplified 4-state FSM)"""
+    RESET        = 0x0  # Initial reset, all held in reset
+    WAIT_SUPPLY  = 0x1  # Wait for supplies to stabilize
+    SEQUENCING   = 0x2  # Release resets in sequence
+    READY        = 0x3  # System ready and operational
+
     STATE_NAMES = {
-        POR_RESET: "POR_RESET",
+        RESET: "RESET",
         WAIT_SUPPLY: "WAIT_SUPPLY",
-        ANALOG_ISO: "ANALOG_ISO",
-        DIGITAL_PULSE: "DIGITAL_PULSE",
-        ANALOG_PULSE: "ANALOG_PULSE",
-        RELEASE_ISO: "RELEASE_ISO",
-        READY: "READY",
-        ERROR: "ERROR"
+        SEQUENCING: "SEQUENCING",
+        READY: "READY"
     }
-    
+
     @classmethod
     def get_name(cls, state_value):
         """Get human-readable state name"""

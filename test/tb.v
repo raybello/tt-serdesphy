@@ -89,17 +89,17 @@ module tb ();
   assign rx_valid = uo_out[7];      // RX valid (bit 7, also dbg_ana)
   
   // Internal POR monitoring signals (for testing)
-  wire [3:0] por_state;
+  wire [2:0] por_state;
   wire por_active;
   wire por_complete;
   wire power_good;
   wire analog_iso_n;
   wire digital_reset_n;
   wire analog_reset_n;
-  
+
   // Hierarchical access to internal POR signals
-  assign por_state = user_project.u_top.u_pcs.u_por.por_state;
-  assign por_active = user_project.u_top.u_pcs.u_por.por_active_reg;
+  assign por_state = user_project.u_top.u_pcs.u_por.state;
+  assign por_active = user_project.u_top.u_pcs.u_por.por_active;
   assign por_complete = user_project.u_top.u_pcs.u_por.por_complete_reg;
   assign power_good = user_project.u_top.u_pcs.u_por.power_good_reg;
   assign analog_iso_n = user_project.u_top.u_pcs.u_por.analog_iso_n_reg;
