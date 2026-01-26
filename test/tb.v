@@ -53,8 +53,14 @@ module tb ();
     forever #21 clk_ref_24m = ~clk_ref_24m;  // 24MHz = 42ns period
   end
 
-  // SDA tri-state handling
-  assign sda_internal = (sda_oe) ? sda_out : 1'b1;  // Default high when not driven
+  // SDA open-drain bus modeling
+  // Both master (testbench) and slave can pull SDA low
+  // Line is high only when both release (wired-AND logic)
+  // Master drives: sda_oe=1 means master is driving, sda_out is the value
+  // Slave drives: uio_oe[0]=1 means slave is pulling low (uio_out[0]=0)
+  wire sda_master_drive = (sda_oe) ? sda_out : 1'b1;  // Master SDA drive (release = high)
+  wire sda_slave_drive = (uio_oe[0]) ? uio_out[0] : 1'b1;  // Slave SDA drive (release = high)
+  assign sda_internal = sda_master_drive & sda_slave_drive;  // Open-drain wired-AND
   
   // Map Tiny Tapeout signals to testbench controls
   assign ui_in[0] = clk_ref_24m;    // 24MHz reference clock
@@ -73,7 +79,8 @@ module tb ();
   assign uio_in[6] = lpbk_en;       // Loopback enable
 
   // Handle SDA bidirectional (uio_out[0]/uio_in[0])
-  assign uio_out[0] = sda_internal;
+  // Connect the open-drain bus signal to uio_in[0] so design can see it
+  assign uio_in[0] = sda_internal;
   
   // Unused UIO inputs
   assign uio_in[2] = 1'b0;          // TXP (output)

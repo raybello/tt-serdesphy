@@ -4,8 +4,10 @@ module serdesphy_top(
 	input 	clk_ref_24m,
 	input 	rst_n,
 	output 	pll_lock,
-	// CSR Interface
-	inout 	sda,
+	// CSR Interface - I2C (separate signals for Tiny Tapeout IO)
+	input 	sda_in,
+	output 	sda_out,
+	output 	sda_oe,
 	input 	scl,
 	// Transmit
 	input 	[3:0]	tx_data,
@@ -181,7 +183,9 @@ module serdesphy_top(
 		.clk_240m_rx_en     (clk_240m_rx_en),
 		
 		// CSR Interface - I2C
-		.sda                (sda),
+		.sda_in             (sda_in),
+		.sda_out            (sda_out),
+		.sda_oe             (sda_oe),
 		.scl                (scl),
 		
 		// CSR Interface - TX Controls

@@ -129,3 +129,85 @@ async def mission_mode_traffic(dut):
         dut._log.warning("✗ Mission mode test FAILED")
     
     dut._log.info("=== Mission Mode Traffic Test Completed ===")
+
+
+@cocotb.test()
+async def csr_register_readback(dut):
+    """Test 4: CSR Register Write and Readback Test
+
+    This test verifies that CSR values written via I2C are properly
+    stored in registers and can be read back correctly.
+    """
+    dut._log.info("=== CSR Register Readback Test Started ===")
+
+    clock = Clock(dut.clk, Config.SYS_CLK_PERIOD_NS, unit="ns")
+    cocotb.start_soon(clock.start())
+
+    await TestUtils.reset_sequence(dut)
+    await ClockCycles(dut.clk, Config.STABILIZATION_CYCLES)
+
+    i2c = I2CRegisterInterface(dut)
+
+    # Test data patterns for each register
+    test_patterns = {
+        RegisterMap.PHY_ENABLE:  0x03,   # Enable PHY and isolation
+        RegisterMap.TX_CONFIG:   0x0F,   # Enable all TX features
+        RegisterMap.RX_CONFIG:   0x07,   # Enable RX, FIFO, PRBS check
+        RegisterMap.DATA_SELECT: 0x03,   # Both TX and RX select high
+        RegisterMap.PLL_CONFIG:  0x5A,   # VCO=10, CP=1, PLL_RST=0, BYPASS=0
+        RegisterMap.CDR_CONFIG:  0x1C,   # Gain=4, fast_lock=1, reset=1
+        RegisterMap.CONTROL:     0x0F,   # Debug enables
+    }
+
+    # Write test patterns to all writable registers
+    dut._log.info("Writing test patterns to registers...")
+    for reg_addr, value in test_patterns.items():
+        dut._log.info(f"  Writing 0x{value:02X} to reg 0x{reg_addr:02X}")
+        await i2c.write_register(reg_addr, value)
+        await ClockCycles(dut.clk, 10)  # Small delay between writes
+
+    # Read back and verify all registers
+    dut._log.info("Reading back and verifying registers...")
+    all_passed = True
+
+    for reg_addr, expected in test_patterns.items():
+        actual = await i2c.read_register(reg_addr)
+
+        if actual == expected:
+            dut._log.info(f"  Reg 0x{reg_addr:02X}: PASS (0x{actual:02X})")
+        else:
+            dut._log.error(f"  Reg 0x{reg_addr:02X}: FAIL (expected 0x{expected:02X}, got 0x{actual:02X})")
+            all_passed = False
+
+    # Also read the status register (read-only)
+    status = await i2c.read_register(RegisterMap.STATUS)
+    dut._log.info(f"  Status Reg 0x{RegisterMap.STATUS:02X}: 0x{status:02X}")
+
+    # Test write-then-read with different values
+    dut._log.info("Testing register update with new values...")
+
+    new_patterns = {
+        RegisterMap.PHY_ENABLE:  0x01,   # Only PHY enable
+        RegisterMap.TX_CONFIG:   0x05,   # TX enable + PRBS
+        RegisterMap.RX_CONFIG:   0x01,   # Only RX enable
+    }
+
+    for reg_addr, value in new_patterns.items():
+        await i2c.write_register(reg_addr, value)
+        await ClockCycles(dut.clk, 10)
+        actual = await i2c.read_register(reg_addr)
+
+        if actual == value:
+            dut._log.info(f"  Reg 0x{reg_addr:02X}: PASS (updated to 0x{actual:02X})")
+        else:
+            dut._log.error(f"  Reg 0x{reg_addr:02X}: FAIL (expected 0x{value:02X}, got 0x{actual:02X})")
+            all_passed = False
+
+    # Final summary
+    if all_passed:
+        dut._log.info("✓ CSR Register Readback Test PASSED")
+    else:
+        dut._log.error("✗ CSR Register Readback Test FAILED")
+        assert False, "Register readback verification failed"
+
+    dut._log.info("=== CSR Register Readback Test Completed ===")

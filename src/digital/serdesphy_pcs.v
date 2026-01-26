@@ -29,8 +29,10 @@ descrambling etc.
     input       clk_240m_tx_en,     // 240MHz TX clock enable
     input       clk_240m_rx_en,     // 240MHz RX clock enable
     
-    // CSR Interface - I2C
-    inout       sda,                // I2C data
+    // CSR Interface - I2C (separate signals for Tiny Tapeout IO)
+    input       sda_in,             // I2C data input
+    output      sda_out,            // I2C data output
+    output      sda_oe,             // I2C data output enable
     input       scl,                // I2C clock
     
     // CSR Interface - TX Controls
@@ -231,7 +233,9 @@ descrambling etc.
 	serdesphy_csr_top u_csr_top (
 		.clk             (clk_ref_24m),
 		.rst_n           (digital_reset_n),
-		.sda             (sda),
+		.sda_in          (sda_in),
+		.sda_out         (sda_out),
+		.sda_oe          (sda_oe),
 		.scl             (scl),
 		
 		// Control outputs

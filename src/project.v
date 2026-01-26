@@ -16,13 +16,15 @@ module tt_um_raybello_serdesphy_top (
     input  wire       rst_n     // reset_n - low to reset
 );
 
-  // Internal wires for bidirectional signals
-  wire sda_internal;
-  
-  // Open-drain SDA implementation
-  // assign sda_internal = (uio_oe[0]) ? uio_out[0] : 1'bz;
-  // assign uio_out[0]   = 1'b0;  // Drive low when output enabled
-  assign uio_oe[0]    = 1'b0;   // SDA is input by default (open-drain)
+  // Internal wires for SDA bidirectional handling
+  wire sda_out_internal;
+  wire sda_oe_internal;
+
+  // SDA open-drain implementation:
+  // - sda_out is always 0 (pull low when enabled)
+  // - sda_oe controls when to drive low (1 = drive low, 0 = release/input)
+  assign uio_out[0] = sda_out_internal;  // Always 0 from slave
+  assign uio_oe[0]  = sda_oe_internal;   // Enable output when slave drives low
   
   // Configure bidirectional pin directions
   // Outputs: TXP, TXN, DBG_ANA
@@ -48,9 +50,11 @@ module tt_um_raybello_serdesphy_top (
     .rst_n      (ui_in[1]),     // Active-low reset
     .pll_lock   (uo_out[4]),    // PLL lock indicator
     
-    // CSR Interface  
-    .sda        (uio_out[0]), // I²C data (open-drain)
-    .scl        (uio_in[1]),    // I²C clock (input)
+    // CSR Interface - I2C with separate signals for open-drain handling
+    .sda_in     (uio_in[0]),        // SDA input (from master)
+    .sda_out    (sda_out_internal), // SDA output (always 0, used with oe)
+    .sda_oe     (sda_oe_internal),  // SDA output enable (1 = drive low)
+    .scl        (uio_in[1]),        // I2C clock (input)
     
     // Transmit
     .tx_data    (ui_in[5:2]),   // TX data bits [3:0]
