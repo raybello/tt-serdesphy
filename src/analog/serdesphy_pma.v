@@ -75,7 +75,43 @@ module serdesphy_pma(
     // TODO: instantiate mock serdesphy_ana_pll
 
     wire analog_en;
-    
-    
+
+    // =========================================================================
+    // Tieoffs for undriven outputs - TODO: connect to analog blocks when implemented
+    // =========================================================================
+
+    // TODO: Connect pll_lock_raw from analog PLL when implemented
+    assign pll_lock_raw = 1'b0;
+    // TODO: Connect pll_vco_ok from analog PLL when implemented
+    assign pll_vco_ok = 1'b0;
+    // TODO: Connect pll_cp_ok from analog PLL when implemented
+    assign pll_cp_ok = 1'b0;
+
+    // TODO: Connect serializer_ready from analog serializer when implemented
+    assign serializer_ready = 1'b0;
+    // TODO: Connect serializer_error from analog serializer when implemented
+    assign serializer_error = 1'b0;
+    // TODO: Connect serializer_active from analog serializer when implemented
+    assign serializer_active = 1'b0;
+    // TODO: Connect serializer_status from analog serializer when implemented
+    assign serializer_status = 1'b0;
+
+    // TODO: Connect deserializer_ready from analog deserializer when implemented
+    assign deserializer_ready = 1'b0;
+    // TODO: Connect deserializer_lock from analog deserializer when implemented
+    assign deserializer_lock = 1'b0;
+    // TODO: Connect deserializer_error from analog deserializer when implemented
+    assign deserializer_error = 1'b0;
+    // TODO: Connect deserializer_active from analog deserializer when implemented
+    assign deserializer_active = 1'b0;
+    // TODO: Connect deserializer_status from analog deserializer when implemented
+    assign deserializer_status = 1'b0;
+    // TODO: Connect deserializer_data from analog deserializer when implemented
+    assign deserializer_data = 1'b0;
+
+    // TODO: Connect txp from analog TX driver when implemented
+    assign txp = 1'b0;
+    // TODO: Connect txn from analog TX driver when implemented
+    assign txn = 1'b1;
 
 endmodule

@@ -167,6 +167,17 @@ descrambling etc.
 	assign pll_status = 8'h00;
 	assign pll_error = 1'b0;
 
+	// TODO: Connect tx_serial_data from TX Top module when implemented
+	assign tx_serial_data = 1'b0;
+	// TODO: Connect tx_serial_valid from TX Top module when implemented
+	assign tx_serial_valid = 1'b0;
+	// TODO: Connect tx_idle_pattern from TX Top module when implemented
+	assign tx_idle_pattern = 1'b0;
+	// TODO: Connect rx_data from RX Top module when implemented
+	assign rx_data = 4'b0000;
+	// TODO: Connect rx_valid from RX Top module when implemented
+	assign rx_valid = 1'b0;
+
 
     // Power-on-Reset Controller
 	serdesphy_por u_por (

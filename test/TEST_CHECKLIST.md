@@ -6,95 +6,95 @@ Comprehensive test coverage based on the system architecture (docs/info.md).
 
 ## 1. Power-On Reset (POR)
 
-- [ ] **POR_001**: Verify POR sequence completes after reset release
-- [ ] **POR_002**: Verify digital_reset_n releases before analog_reset_n
-- [ ] **POR_003**: Verify analog isolation is released during sequence
-- [ ] **POR_004**: Verify power_good asserts when supplies stable
-- [ ] **POR_005**: Test supply loss detection (dvdd_ok goes low during READY)
-- [ ] **POR_006**: Test supply loss detection (avdd_ok goes low during READY)
-- [ ] **POR_007**: Verify re-sequencing after supply recovery
-- [ ] **POR_008**: Test external reset (rst_n_in) at any state
-- [ ] **POR_009**: Verify por_active flag during sequencing
-- [ ] **POR_010**: Verify por_complete flag in READY state
+- [X] **POR_001**: Verify POR sequence completes after reset release
+- [X] **POR_002**: Verify digital_reset_n releases before analog_reset_n
+- [X] **POR_003**: Verify analog isolation is released during sequence
+- [X] **POR_004**: Verify power_good asserts when supplies stable
+- [X] **POR_005**: Test supply loss detection (dvdd_ok goes low during READY)
+- [X] **POR_006**: Test supply loss detection (avdd_ok goes low during READY)
+- [X] **POR_007**: Verify re-sequencing after supply recovery
+- [X] **POR_008**: Test external reset (rst_n_in) at any state
+- [X] **POR_009**: Verify por_active flag during sequencing
+- [X] **POR_010**: Verify por_complete flag in READY state
 
 ---
 
 ## 2. I2C Interface
 
 ### 2.1 Basic Protocol
-- [ ] **I2C_001**: Write single register
-- [ ] **I2C_002**: Read single register
-- [ ] **I2C_003**: Verify correct slave address (0x42)
-- [ ] **I2C_004**: Verify ACK on valid address
-- [ ] **I2C_005**: Verify NACK on invalid address
-- [ ] **I2C_006**: Repeated START for read operation
-- [ ] **I2C_007**: STOP condition terminates transaction
+- [X] **I2C_001**: Write single register
+- [X] **I2C_002**: Read single register
+- [X] **I2C_003**: Verify correct slave address (0x42)
+- [X] **I2C_004**: Verify ACK on valid address
+- [X] **I2C_005**: Verify NACK on invalid address
+- [X] **I2C_006**: Repeated START for read operation
+- [X] **I2C_007**: STOP condition terminates transaction
 
 ### 2.2 Timing
-- [ ] **I2C_008**: SCL frequency range (10 kHz to 24 MHz)
-- [ ] **I2C_009**: SDA setup time (100 ns min)
-- [ ] **I2C_010**: START hold time (600 ns min)
-- [ ] **I2C_011**: STOP setup time (600 ns min)
+- [X] **I2C_008**: SCL frequency range (10 kHz to 24 MHz)
+- [X] **I2C_009**: SDA setup time (100 ns min)
+- [X] **I2C_010**: START hold time (600 ns min)
+- [X] **I2C_011**: STOP setup time (600 ns min)
 
 ---
 
 ## 3. Register Map
 
 ### 3.1 PHY_ENABLE (0x00)
-- [ ] **REG_001**: Read default value (PHY_EN=0, ISO_EN=1)
-- [ ] **REG_002**: Write PHY_EN=1, verify PHY enables
-- [ ] **REG_003**: Write ISO_EN=0, verify isolation releases
-- [ ] **REG_004**: Verify reserved bits read as 0
+- [X] **REG_001**: Read default value (PHY_EN=0, ISO_EN=1)
+- [X] **REG_002**: Write PHY_EN=1, verify PHY enables
+- [X] **REG_003**: Write ISO_EN=0, verify isolation releases
+- [X] **REG_004**: Verify reserved bits read as 0
 
 ### 3.2 TX_CONFIG (0x01)
-- [ ] **REG_005**: Write TX_EN=1, verify TX enables
-- [ ] **REG_006**: Write TX_FIFO_EN=1, verify FIFO enables
-- [ ] **REG_007**: Write TX_PRBS_EN=1, verify PRBS generator
-- [ ] **REG_008**: Write TX_IDLE=1, verify idle pattern output
-- [ ] **REG_009**: Test TX_IDLE overrides data sources
+- [X] **REG_005**: Write TX_EN=1, verify TX enables
+- [X] **REG_006**: Write TX_FIFO_EN=1, verify FIFO enables
+- [X] **REG_007**: Write TX_PRBS_EN=1, verify PRBS generator
+- [X] **REG_008**: Write TX_IDLE=1, verify idle pattern output
+- [X] **REG_009**: Test TX_IDLE overrides data sources
 
 ### 3.3 RX_CONFIG (0x02)
-- [ ] **REG_010**: Write RX_EN=1, verify RX enables
-- [ ] **REG_011**: Write RX_FIFO_EN=1, verify FIFO enables
-- [ ] **REG_012**: Write RX_PRBS_CHK_EN=1, verify checker
-- [ ] **REG_013**: Write RX_ALIGN_RST=1, verify self-clearing
-- [ ] **REG_014**: Verify RX_ALIGN_RST resets error counter
+- [X] **REG_010**: Write RX_EN=1, verify RX enables
+- [X] **REG_011**: Write RX_FIFO_EN=1, verify FIFO enables
+- [X] **REG_012**: Write RX_PRBS_CHK_EN=1, verify checker
+- [X] **REG_013**: Write RX_ALIGN_RST=1, verify self-clearing
+- [X] **REG_014**: Verify RX_ALIGN_RST resets error counter
 
 ### 3.4 DATA_SELECT (0x03)
-- [ ] **REG_015**: TX_DATA_SEL=0 selects PRBS source
-- [ ] **REG_016**: TX_DATA_SEL=1 selects FIFO source
-- [ ] **REG_017**: RX_DATA_SEL=0 selects FIFO output
-- [ ] **REG_018**: RX_DATA_SEL=1 selects PRBS status
-- [ ] **REG_019**: Verify constraint: don't change TX_DATA_SEL while TX_EN=1
+- [X] **REG_015**: TX_DATA_SEL=0 selects PRBS source
+- [X] **REG_016**: TX_DATA_SEL=1 selects FIFO source
+- [X] **REG_017**: RX_DATA_SEL=0 selects FIFO output
+- [X] **REG_018**: RX_DATA_SEL=1 selects PRBS status
+- [X] **REG_019**: Verify constraint: don't change TX_DATA_SEL while TX_EN=1
 
 ### 3.5 PLL_CONFIG (0x04)
-- [ ] **REG_020**: VCO_TRIM sweep (0x0 to 0xF)
-- [ ] **REG_021**: CP_CURRENT settings (10/20/40/80 uA)
-- [ ] **REG_022**: PLL_RST=1 holds PLL in reset
-- [ ] **REG_023**: PLL_RST=0 releases PLL
-- [ ] **REG_024**: PLL_BYPASS=1 bypasses PLL
+- [X] **REG_020**: VCO_TRIM sweep (0x0 to 0xF)
+- [X] **REG_021**: CP_CURRENT settings (10/20/40/80 uA)
+- [X] **REG_022**: PLL_RST=1 holds PLL in reset
+- [X] **REG_023**: PLL_RST=0 releases PLL
+- [X] **REG_024**: PLL_BYPASS=1 bypasses PLL
 
 ### 3.6 CDR_CONFIG (0x05)
-- [ ] **REG_025**: CDR_GAIN sweep (0x0 to 0x7)
-- [ ] **REG_026**: CDR_FAST_LOCK=1 enables fast acquisition
-- [ ] **REG_027**: CDR_RST=1 holds CDR in reset
-- [ ] **REG_028**: CDR_RST=0 releases CDR
+- [X] **REG_025**: CDR_GAIN sweep (0x0 to 0x7)
+- [X] **REG_026**: CDR_FAST_LOCK=1 enables fast acquisition
+- [X] **REG_027**: CDR_RST=1 holds CDR in reset
+- [X] **REG_028**: CDR_RST=0 releases CDR
 
 ### 3.7 STATUS (0x06, Read-Only)
-- [ ] **REG_029**: Verify PLL_LOCK reflects lock status
-- [ ] **REG_030**: Verify CDR_LOCK reflects lock status
-- [ ] **REG_031**: Verify TX_FIFO_FULL flag
-- [ ] **REG_032**: Verify TX_FIFO_EMPTY flag
-- [ ] **REG_033**: Verify RX_FIFO_FULL flag
-- [ ] **REG_034**: Verify RX_FIFO_EMPTY flag
-- [ ] **REG_035**: Verify PRBS_ERR is sticky, clears on read
-- [ ] **REG_036**: Verify FIFO_ERR is sticky, clears on read
+- [X] **REG_029**: Verify PLL_LOCK reflects lock status
+- [X] **REG_030**: Verify CDR_LOCK reflects lock status
+- [X] **REG_031**: Verify TX_FIFO_FULL flag
+- [X] **REG_032**: Verify TX_FIFO_EMPTY flag
+- [X] **REG_033**: Verify RX_FIFO_FULL flag
+- [X] **REG_034**: Verify RX_FIFO_EMPTY flag
+- [X] **REG_035**: Verify PRBS_ERR is sticky, clears on read
+- [X] **REG_036**: Verify FIFO_ERR is sticky, clears on read
 
 ### 3.8 DEBUG_ENABLE (0x07)
-- [ ] **REG_037**: DBG_VCTRL routes VCO control to DBG_ANA
-- [ ] **REG_038**: DBG_PD routes phase detector to DBG_ANA
-- [ ] **REG_039**: DBG_FIFO routes FIFO status to DBG_ANA
-- [ ] **REG_040**: Verify only one debug source active at a time
+- [X] **REG_037**: DBG_VCTRL routes VCO control to DBG_ANA
+- [X] **REG_038**: DBG_PD routes phase detector to DBG_ANA
+- [X] **REG_039**: DBG_FIFO routes FIFO status to DBG_ANA
+- [X] **REG_040**: Verify only one debug source active at a time
 
 ---
 

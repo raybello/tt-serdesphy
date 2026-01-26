@@ -134,7 +134,33 @@ module serdesphy_top(
 	wire pll_lock_raw;
 	wire pll_vco_ok;
 	wire pll_cp_ok;
-	
+
+	// =========================================================================
+	// Tieoffs for undriven internal wires - TODO: connect when features implemented
+	// =========================================================================
+
+	// TODO: Connect clk_240m_tx from PLL when analog PLL is implemented
+	assign clk_240m_tx = 1'b0;
+	// TODO: Connect clk_240m_rx from CDR when analog CDR is implemented
+	assign clk_240m_rx = 1'b0;
+
+	// TODO: Connect digital_reset_n from PCS internal logic when needed
+	assign digital_reset_n = rst_n;
+
+	// TODO: Connect clk_24m_en from clock manager when implemented
+	assign clk_24m_en = 1'b1;
+	// TODO: Connect clk_240m_tx_en from clock manager when implemented
+	assign clk_240m_tx_en = 1'b0;
+	// TODO: Connect clk_240m_rx_en from clock manager when implemented
+	assign clk_240m_rx_en = 1'b0;
+
+	// TODO: Connect rx_serial_valid from deserializer interface when implemented
+	assign rx_serial_valid = 1'b0;
+	// TODO: Connect rx_serial_error from deserializer interface when implemented
+	assign rx_serial_error = 1'b0;
+
+	// =========================================================================
+
 	// PCS Internal Logic - Connect RX serial data from PMA
 	assign rx_serial_data = deserializer_data;
 	
@@ -285,9 +311,13 @@ module serdesphy_top(
 		
 		// PRBS Error
 		.prbs_err           (prbs_err),
-		
+
 		// Debug Output
-		.dbg_ana            (dbg_ana)
+		.dbg_ana            (dbg_ana),
+
+		// Reset Control Outputs
+		.analog_iso_n       (analog_iso_n),
+		.analog_reset_n     (analog_reset_n)
 	);
 
 	// Physical Medium Attachment
