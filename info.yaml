@@ -42,6 +42,19 @@ project:
     - "digital/rx/serdesphy_rx_fifo.v"
     - "digital/rx/serdesphy_word_disassembler.v"
     - "analog/serdesphy_pma.v"
+    - "analog/ana_pll/serdesphy_ana_pll.v"
+    - "analog/ana_pll/serdesphy_ana_phase_frequency_detector.v"
+    - "analog/ana_pll/serdesphy_ana_pll_charge_pump.v"
+    - "analog/ana_pll/serdesphy_ana_pll_loop_filter.v"
+    - "analog/ana_pll/serdesphy_ana_pll_vco.v"
+    - "analog/ana_pll/serdesphy_ana_frequency_divider.v"
+    - "analog/ana_pll/serdesphy_ana_loopback_switch.v"
+    - "analog/ana_tx/serdesphy_ana_tx_differential_driver.v"
+    # - "analog/ana_tx/serdesphy_ana_serializer.v"
+    - "src/analog/ana_rx/serdesphy_ana_rx_differential_receiver.v"
+    - "src/analog/ana_rx/serdesphy_ana_cdr_vco.v"
+    - "src/analog/ana_rx/serdesphy_ana_cdr.v"
+    
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
 # This section is for the datasheet/website. Use descriptive names (e.g., RX, TX, MOSI, SCL, SEG_A, etc.).
