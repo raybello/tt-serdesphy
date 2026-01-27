@@ -80,10 +80,10 @@ module serdesphy_ana_cdr_vco (
     always begin
         if (!rst_n || !enable) begin
             vco_out_reg = 1'b0;
-            @(posedge rst_n or posedge enable);
-            #1; // Small delay after enable
+            // @(posedge rst_n or posedge enable);
+            // #1; // Small delay after enable
         end else begin
-            #(half_period_ns);
+            // #(half_period_ns);
             vco_out_reg = ~vco_out_reg;
         end
     end
