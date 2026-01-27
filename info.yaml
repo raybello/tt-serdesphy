@@ -51,9 +51,9 @@ project:
     - "analog/ana_pll/serdesphy_ana_loopback_switch.v"
     - "analog/ana_tx/serdesphy_ana_tx_differential_driver.v"
     # - "analog/ana_tx/serdesphy_ana_serializer.v"
-    - "src/analog/ana_rx/serdesphy_ana_rx_differential_receiver.v"
-    - "src/analog/ana_rx/serdesphy_ana_cdr_vco.v"
-    - "src/analog/ana_rx/serdesphy_ana_cdr.v"
+    - "analog/ana_rx/serdesphy_ana_rx_differential_receiver.v"
+    - "analog/ana_rx/serdesphy_ana_cdr_vco.v"
+    - "analog/ana_rx/serdesphy_ana_cdr.v"
     
 
 # The pinout of your project. Leave unused pins blank. DO NOT delete or add any pins.
