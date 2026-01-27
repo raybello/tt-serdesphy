@@ -39,8 +39,8 @@ module serdesphy_ana_cdr_vco (
     // Control range: cdr_control 0-255, center at 128
     // Tighter tracking: +/- 12.8 MHz from center (0.1 MHz per LSB)
 
-    real half_period_ns;
-    real frequency_mhz;
+    realtime half_period_ns;
+    realtime frequency_mhz;
 
     // Calculate frequency based on control voltage
     always @(cdr_control) begin

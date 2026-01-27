@@ -39,8 +39,8 @@ module serdesphy_ana_pll_vco (
     // Control range: vco_control 0-255, center at 128
     // Frequency adjustment: +/- 64 MHz from center
 
-    real half_period_ns;
-    real frequency_mhz;
+    realtime half_period_ns;
+    realtime frequency_mhz;
 
     // Calculate frequency based on control voltage
     always @(vco_control) begin
