@@ -159,9 +159,9 @@ module serdesphy_tx_top (
         .prbs_data    (prbs_data_out),
         .prbs_valid   (prbs_data_valid),
         .prbs_ready   (mux_prbs_ready),
-        .output_data  (tx_mux_data_out),
-        .output_valid (tx_mux_data_valid),
-        .output_ready (mux_output_ready)
+        .mux_data     (tx_mux_data_out),
+        .mux_valid    (tx_mux_data_valid),
+        .mux_ready    (mux_output_ready)
     );
 
     // Instantiate Manchester encoder

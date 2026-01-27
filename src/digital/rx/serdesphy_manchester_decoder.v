@@ -36,15 +36,15 @@ module serdesphy_manchester_decoder (
     localparam STATE_READY     = 2'b10;
     localparam STATE_OUTPUT    = 2'b11;
     
-    // Manchester decoding logic
-    function [7:0] decode_manchester;
+    // Manchester decoding logic - returns {decoded_data[7:0], error_flag}
+    function [8:0] decode_manchester;
         input [15:0] data;
-        input error_detected;
+        reg error_flag;
         integer i;
         begin
-            error_detected = 0;
-            decode_manchester = 8'b0;
-            
+            error_flag = 0;
+            decode_manchester = 9'b0;
+
             for (i = 0; i < 8; i = i + 1) begin
                 // Extract 2-bit symbol pair
                 case ({data[2*i+1], data[2*i]})  // MSB first
@@ -58,16 +58,21 @@ module serdesphy_manchester_decoder (
                     end
                     default: begin
                         // Invalid Manchester pattern
-                        error_detected = 1;
+                        error_flag = 1;
                     end
                 endcase
             end
+            decode_manchester[8] = error_flag;
         end
     endfunction
     
     // State machine for decoding process
     reg manchester_error_flag;
-    
+
+    // Combinational decode result - function returns {error_flag, decoded_data[7:0]}
+    wire [8:0] decode_result;
+    assign decode_result = decode_manchester(manchester_data_reg);
+
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             decode_state <= STATE_IDLE;
@@ -88,15 +93,11 @@ module serdesphy_manchester_decoder (
                         decode_state <= STATE_DECODING;
                     end
                 end
-                
+
                 STATE_DECODING: begin
-                    // Perform Manchester decoding
-                    reg [7:0] temp_data;
-                    reg temp_error;
-                    
-                    {temp_data, temp_error} = decode_manchester(manchester_data_reg);
-                    decoded_data_reg <= temp_data;
-                    manchester_error_flag <= temp_error;
+                    // Perform Manchester decoding using combinational result
+                    decoded_data_reg <= decode_result[7:0];
+                    manchester_error_flag <= decode_result[8];
                     decode_state <= STATE_READY;
                 end
                 
