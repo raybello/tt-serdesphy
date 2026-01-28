@@ -40,6 +40,8 @@ module serdesphy_rx_fifo (
     reg [ADDR_WIDTH:0] rd_ptr_binary, rd_ptr_binary_next;
     reg [ADDR_WIDTH:0] wr_ptr_gray_sync1, wr_ptr_gray_sync2;
     reg [ADDR_WIDTH:0] rd_ptr_gray_sync1, rd_ptr_gray_sync2;
+    reg [ADDR_WIDTH:0] wr_ptr_binary_sync;
+    reg [ADDR_WIDTH:0] rd_ptr_binary_sync;
     reg [7:0]          fifo_mem [0:FIFO_DEPTH-1];
     reg                 full_flag;
     reg                 empty_flag;
@@ -110,7 +112,6 @@ module serdesphy_rx_fifo (
             underflow_flag <= 0;
         end else begin
             // Convert synchronized write pointer back to binary for comparison
-            reg [ADDR_WIDTH:0] wr_ptr_binary_sync;
             wr_ptr_binary_sync = wr_ptr_gray_sync2;
             wr_ptr_binary_sync = wr_ptr_binary_sync ^ (wr_ptr_binary_sync >> 2);
             wr_ptr_binary_sync = wr_ptr_binary_sync ^ (wr_ptr_binary_sync >> 1);
@@ -130,7 +131,6 @@ module serdesphy_rx_fifo (
             full_flag <= 0;
         end else begin
             // Convert synchronized read pointer back to binary for comparison
-            reg [ADDR_WIDTH:0] rd_ptr_binary_sync;
             rd_ptr_binary_sync = rd_ptr_gray_sync2;
             rd_ptr_binary_sync = rd_ptr_binary_sync ^ (rd_ptr_binary_sync >> 2);
             rd_ptr_binary_sync = rd_ptr_binary_sync ^ (rd_ptr_binary_sync >> 1);
