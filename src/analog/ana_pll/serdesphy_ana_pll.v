@@ -99,11 +99,11 @@ module serdesphy_ana_pll (
     
     // PLL state machine and lock detection
     always @(posedge clk_ref_24m or negedge rst_n) begin
-        if (!rst_n || pll_rst) begin
+        if (!rst_n) begin
             pll_state <= STATE_RESET;
             pll_lock_reg <= 0;
             lock_counter <= 10'h000;
-        end else if (!enable || pll_bypass) begin
+        end else if (pll_rst || !enable || pll_bypass) begin
             pll_state <= STATE_RESET;
             pll_lock_reg <= 0;
             lock_counter <= 10'h000;
