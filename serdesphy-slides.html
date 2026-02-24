@@ -1,0 +1,1980 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SKY130 SerDes PHY — Design Overview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+/* =====================================================
+   CSS CUSTOM PROPERTIES — edit here to retheme
+   ===================================================== */
+:root {
+  --bg:       #070d1a;
+  --bg2:      #0d1628;
+  --bg3:      #111f38;
+  --border:   rgba(0,212,170,0.12);
+  --text:     #e8f0fe;
+  --sub:      #6b7fa3;
+  --muted:    rgba(107,127,163,0.45);
+  --accent:   #00d4aa;
+  --accent2:  #0080ff;
+  --warn:     #ff8c42;
+  --sans:     'Space Grotesk', sans-serif;
+  --mono:     'Space Mono', monospace;
+  --ease:     cubic-bezier(0.16, 1, 0.3, 1);
+  /* typography — clamp() for responsive scaling */
+  --t-title:  clamp(2rem, 5.5vw, 4.5rem);
+  --t-h2:     clamp(1.4rem, 3.2vw, 2.6rem);
+  --t-h3:     clamp(1rem, 2vw, 1.5rem);
+  --t-body:   clamp(0.75rem, 1.3vw, 1rem);
+  --t-small:  clamp(0.62rem, 1vw, 0.78rem);
+  --t-mono:   clamp(0.6rem, 1vw, 0.75rem);
+  /* spacing */
+  --pad:      clamp(1.5rem, 4vw, 4rem);
+  --gap:      clamp(0.75rem, 1.5vw, 1.5rem);
+  --gap-sm:   clamp(0.4rem, 0.8vw, 0.75rem);
+}
+
+/* =====================================================
+   RESET & BASE
+   ===================================================== */
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+html {
+  height: 100%;
+  scroll-snap-type: y mandatory;
+  scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  height: 100%;
+  overflow-x: hidden;
+}
+
+/* =====================================================
+   SLIDE BASE — viewport-fitting is CRITICAL
+   ===================================================== */
+.slide {
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: var(--pad);
+  position: relative;
+}
+
+/* Circuit grid overlay on every slide */
+.slide::before {
+  content: '';
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,170,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,170,0.035) 1px, transparent 1px);
+  background-size: 44px 44px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Glow orb - default top-right */
+.slide::after {
+  content: '';
+  position: absolute;
+  width: clamp(300px, 50vw, 700px);
+  height: clamp(300px, 50vh, 700px);
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0,128,255,0.1) 0%, transparent 70%);
+  top: -15%; right: -10%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.slide-content {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+/* =====================================================
+   PROGRESS BAR
+   ===================================================== */
+#progress-bar {
+  position: fixed;
+  top: 0; left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  width: 0%;
+  transition: width 0.3s var(--ease);
+  z-index: 100;
+}
+
+/* =====================================================
+   NAV DOTS
+   ===================================================== */
+#nav-dots {
+  position: fixed;
+  right: clamp(0.75rem, 1.5vw, 1.5rem);
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(5px, 0.8vh, 8px);
+  z-index: 100;
+}
+
+.dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+  cursor: pointer;
+  transition: all 0.3s var(--ease);
+}
+
+.dot.active {
+  background: var(--accent);
+  transform: scale(1.5);
+}
+
+.dot:hover { background: var(--text); }
+
+/* =====================================================
+   TYPOGRAPHY UTILITIES
+   ===================================================== */
+.eyebrow {
+  font-family: var(--mono);
+  font-size: var(--t-mono);
+  color: var(--accent);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: clamp(0.6rem, 1.2vh, 1rem);
+}
+
+.eyebrow::before { content: '// '; color: var(--sub); }
+
+h1.title {
+  font-size: var(--t-title);
+  font-weight: 700;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  color: var(--text);
+  margin-bottom: clamp(0.5rem, 1vh, 0.9rem);
+}
+
+h2.slide-title {
+  font-size: var(--t-h2);
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--text);
+  margin-bottom: var(--gap);
+}
+
+h3.section-title {
+  font-size: var(--t-h3);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: var(--gap-sm);
+}
+
+.subtitle {
+  font-size: var(--t-body);
+  color: var(--sub);
+  line-height: 1.65;
+  max-width: 56ch;
+}
+
+.accent { color: var(--accent); }
+.accent2 { color: var(--accent2); }
+.warn { color: var(--warn); }
+.muted { color: var(--sub); }
+
+/* =====================================================
+   DIVIDER
+   ===================================================== */
+.divider {
+  width: clamp(40px, 7vw, 80px);
+  height: 1px;
+  background: linear-gradient(90deg, var(--accent), transparent);
+  margin: clamp(0.6rem, 1.2vh, 1.2rem) 0;
+}
+
+/* =====================================================
+   PILLS / TAGS
+   ===================================================== */
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: clamp(0.35rem, 0.7vw, 0.6rem);
+  margin-top: var(--gap);
+}
+
+.pill {
+  background: rgba(0,212,170,0.08);
+  border: 1px solid rgba(0,212,170,0.22);
+  border-radius: 4px;
+  padding: 0.3em 0.75em;
+  font-family: var(--mono);
+  font-size: var(--t-mono);
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+/* =====================================================
+   FEATURE LIST
+   ===================================================== */
+.feature-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.4rem, 0.9vh, 0.75rem);
+  margin-top: var(--gap-sm);
+}
+
+.feature-list li {
+  font-size: var(--t-body);
+  color: var(--text);
+  line-height: 1.5;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.7em;
+}
+
+.feature-list li::before {
+  content: '▸';
+  color: var(--accent);
+  flex-shrink: 0;
+  margin-top: 0.1em;
+  font-size: 0.85em;
+}
+
+.feature-list li .note {
+  color: var(--sub);
+  font-size: 0.88em;
+}
+
+/* =====================================================
+   DATA TABLE
+   ===================================================== */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: var(--t-mono);
+}
+
+.data-table th {
+  text-align: left;
+  color: var(--accent);
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.45em 0.9em;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 0.45em 0.9em;
+  color: var(--text);
+  border-bottom: 1px solid rgba(0,212,170,0.05);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td { border-bottom: none; }
+
+.data-table td.key {
+  color: var(--sub);
+  font-size: 0.9em;
+}
+
+.data-table td.val-accent { color: var(--accent); }
+
+/* =====================================================
+   STATS ROW
+   ===================================================== */
+.stats-row {
+  display: flex;
+  gap: clamp(1.5rem, 3vw, 3rem);
+  margin-top: var(--gap);
+  flex-wrap: wrap;
+}
+
+.stat { flex-shrink: 0; }
+
+.stat-val {
+  font-family: var(--mono);
+  font-size: clamp(1.2rem, 2.5vw, 2rem);
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1;
+}
+
+.stat-val .unit {
+  font-size: 0.6em;
+  color: var(--accent);
+  margin-left: 0.1em;
+}
+
+.stat-label {
+  font-family: var(--mono);
+  font-size: clamp(0.5rem, 0.85vw, 0.62rem);
+  color: var(--sub);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin-top: 3px;
+}
+
+/* =====================================================
+   TWO-COLUMN GRID
+   ===================================================== */
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(1rem, 2vw, 2.5rem);
+  margin-top: var(--gap);
+  min-height: 0;
+}
+
+.two-col-3-2 {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  gap: clamp(1rem, 2vw, 2.5rem);
+  margin-top: var(--gap);
+  min-height: 0;
+}
+
+/* =====================================================
+   CARD
+   ===================================================== */
+.card {
+  background: rgba(13,22,40,0.7);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: clamp(0.75rem, 1.5vw, 1.4rem);
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-sm);
+  overflow: hidden;
+}
+
+.card-title {
+  font-family: var(--mono);
+  font-size: var(--t-mono);
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.card-body {
+  font-size: var(--t-small);
+  color: var(--sub);
+  line-height: 1.5;
+}
+
+.card-val {
+  font-family: var(--mono);
+  font-size: clamp(1rem, 2vw, 1.6rem);
+  font-weight: 700;
+  color: var(--text);
+}
+
+/* =====================================================
+   PIPELINE COMPONENT
+   ===================================================== */
+.pipeline {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  flex-wrap: wrap;
+  margin-top: var(--gap-sm);
+}
+
+.pipe-stage {
+  background: rgba(13,22,40,0.8);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: clamp(0.4rem, 0.8vh, 0.7rem) clamp(0.6rem, 1.2vw, 1rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.pipe-stage .stage-num {
+  font-family: var(--mono);
+  font-size: clamp(0.45rem, 0.8vw, 0.58rem);
+  color: var(--sub);
+  letter-spacing: 0.08em;
+}
+
+.pipe-stage .stage-name {
+  font-size: clamp(0.6rem, 1.1vw, 0.82rem);
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  line-height: 1.2;
+}
+
+.pipe-stage .stage-note {
+  font-family: var(--mono);
+  font-size: clamp(0.45rem, 0.75vw, 0.58rem);
+  color: var(--accent);
+  text-align: center;
+}
+
+.pipe-arrow {
+  color: var(--sub);
+  font-size: clamp(0.7rem, 1.2vw, 1rem);
+  padding: 0 clamp(2px, 0.4vw, 6px);
+  flex-shrink: 0;
+}
+
+/* =====================================================
+   CODE BLOCK
+   ===================================================== */
+.code-block {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 6px;
+  padding: clamp(0.6rem, 1.2vh, 1.2rem) clamp(0.75rem, 1.5vw, 1.5rem);
+  font-family: var(--mono);
+  font-size: var(--t-mono);
+  line-height: 1.6;
+  color: var(--text);
+  overflow: hidden;
+}
+
+.code-block .cm { color: var(--sub); }
+.code-block .kw { color: var(--accent2); }
+.code-block .val { color: var(--accent); }
+.code-block .reg { color: var(--warn); }
+
+/* =====================================================
+   BLOCK DIAGRAM (CSS-based architecture)
+   ===================================================== */
+.arch-diagram {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.4rem, 0.8vh, 0.8rem);
+  margin-top: var(--gap-sm);
+}
+
+.arch-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(0.4rem, 0.8vw, 0.8rem);
+  width: 100%;
+}
+
+.arch-block {
+  background: rgba(13,22,40,0.85);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: clamp(0.35rem, 0.7vh, 0.6rem) clamp(0.6rem, 1.2vw, 1.2rem);
+  text-align: center;
+  font-size: clamp(0.6rem, 1.1vw, 0.82rem);
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.25;
+  flex-shrink: 0;
+}
+
+.arch-block.accent-border { border-color: rgba(0,212,170,0.4); }
+.arch-block.blue-border   { border-color: rgba(0,128,255,0.4); }
+.arch-block.warn-border   { border-color: rgba(255,140,66,0.4); }
+
+.arch-block .block-sub {
+  font-family: var(--mono);
+  font-size: clamp(0.45rem, 0.75vw, 0.58rem);
+  color: var(--sub);
+  margin-top: 2px;
+}
+
+.arch-label {
+  font-family: var(--mono);
+  font-size: clamp(0.5rem, 0.85vw, 0.65rem);
+  color: var(--sub);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  border-left: 2px solid var(--border);
+  padding-left: 0.6em;
+  white-space: nowrap;
+}
+
+.arch-group {
+  border: 1px solid rgba(0,212,170,0.08);
+  border-radius: 10px;
+  padding: clamp(0.4rem, 0.8vh, 0.75rem) clamp(0.6rem, 1.2vw, 1rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: clamp(0.3rem, 0.6vh, 0.5rem);
+  position: relative;
+}
+
+.arch-group-label {
+  position: absolute;
+  top: -0.6em;
+  left: 0.8em;
+  background: var(--bg);
+  padding: 0 0.4em;
+  font-family: var(--mono);
+  font-size: clamp(0.45rem, 0.75vw, 0.58rem);
+  color: var(--accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.arch-arrow-v {
+  width: 1px;
+  height: clamp(12px, 2vh, 20px);
+  background: linear-gradient(180deg, var(--sub), transparent);
+  position: relative;
+}
+
+.arch-arrow-v::after {
+  content: '▾';
+  position: absolute;
+  bottom: -0.5em;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--sub);
+  font-size: 0.6rem;
+}
+
+/* =====================================================
+   REGISTER MAP GRID
+   ===================================================== */
+.reg-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: clamp(0.4rem, 0.8vw, 0.75rem);
+  margin-top: var(--gap-sm);
+}
+
+.reg-card {
+  background: rgba(13,22,40,0.7);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: clamp(0.5rem, 1vh, 0.9rem) clamp(0.6rem, 1.2vw, 1rem);
+  overflow: hidden;
+}
+
+.reg-addr {
+  font-family: var(--mono);
+  font-size: clamp(0.58rem, 0.95vw, 0.72rem);
+  color: var(--accent);
+  margin-bottom: 3px;
+}
+
+.reg-name {
+  font-size: clamp(0.62rem, 1.1vw, 0.82rem);
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+
+.reg-desc {
+  font-size: clamp(0.55rem, 0.88vw, 0.68rem);
+  color: var(--sub);
+  line-height: 1.4;
+}
+
+/* =====================================================
+   FSM SEQUENCE
+   ===================================================== */
+.fsm-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(0.4rem, 0.8vw, 0.75rem);
+  margin-top: var(--gap-sm);
+  flex-wrap: wrap;
+}
+
+.fsm-state {
+  background: rgba(13,22,40,0.85);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 0.35em 0.9em;
+  font-family: var(--mono);
+  font-size: var(--t-mono);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.fsm-state.active { border-color: var(--accent); color: var(--accent); }
+
+.fsm-arrow {
+  color: var(--sub);
+  font-size: var(--t-small);
+  flex-shrink: 0;
+}
+
+/* =====================================================
+   SEQUENCE LIST (numbered steps)
+   ===================================================== */
+.seq-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(0.35rem, 0.7vh, 0.6rem);
+  counter-reset: seq;
+}
+
+.seq-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75em;
+  font-size: var(--t-body);
+  color: var(--text);
+  line-height: 1.45;
+  counter-increment: seq;
+}
+
+.seq-list li::before {
+  content: counter(seq, decimal-leading-zero);
+  font-family: var(--mono);
+  font-size: var(--t-mono);
+  color: var(--accent);
+  flex-shrink: 0;
+  min-width: 2em;
+  margin-top: 0.15em;
+}
+
+.seq-list li .note {
+  color: var(--sub);
+  font-size: 0.88em;
+}
+
+/* =====================================================
+   FOOTER STRIP (slide number + label)
+   ===================================================== */
+.slide-footer {
+  position: absolute;
+  bottom: clamp(0.75rem, 1.5vh, 1.25rem);
+  left: var(--pad);
+  right: var(--pad);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 2;
+}
+
+.footer-label {
+  font-family: var(--mono);
+  font-size: clamp(0.48rem, 0.8vw, 0.6rem);
+  color: var(--muted);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.footer-num {
+  font-family: var(--mono);
+  font-size: clamp(0.48rem, 0.8vw, 0.6rem);
+  color: var(--muted);
+}
+
+/* =====================================================
+   ANIMATIONS — triggered by .visible class
+   ===================================================== */
+.reveal {
+  opacity: 0;
+  transform: translateY(22px);
+  transition: opacity 0.55s var(--ease), transform 0.55s var(--ease);
+}
+
+.slide.visible .reveal { opacity: 1; transform: translateY(0); }
+
+/* stagger delays */
+.slide.visible .d1 { transition-delay: 0.08s; }
+.slide.visible .d2 { transition-delay: 0.18s; }
+.slide.visible .d3 { transition-delay: 0.28s; }
+.slide.visible .d4 { transition-delay: 0.38s; }
+.slide.visible .d5 { transition-delay: 0.48s; }
+.slide.visible .d6 { transition-delay: 0.58s; }
+
+.reveal-left {
+  opacity: 0;
+  transform: translateX(-24px);
+  transition: opacity 0.55s var(--ease), transform 0.55s var(--ease);
+}
+.slide.visible .reveal-left { opacity: 1; transform: translateX(0); }
+
+.reveal-fade {
+  opacity: 0;
+  transition: opacity 0.7s var(--ease);
+}
+.slide.visible .reveal-fade { opacity: 1; }
+
+/* =====================================================
+   RESPONSIVE BREAKPOINTS
+   ===================================================== */
+@media (max-height: 700px) {
+  :root {
+    --pad:    clamp(1rem, 3vw, 2.5rem);
+    --gap:    clamp(0.5rem, 1.2vh, 1rem);
+    --gap-sm: clamp(0.3rem, 0.6vh, 0.5rem);
+    --t-h2:   clamp(1.2rem, 2.8vw, 2rem);
+  }
+}
+
+@media (max-height: 600px) {
+  :root {
+    --pad:      clamp(0.75rem, 2.5vw, 2rem);
+    --t-title:  clamp(1.5rem, 4.5vw, 3rem);
+    --t-h2:     clamp(1.1rem, 2.4vw, 1.6rem);
+    --t-body:   clamp(0.68rem, 1.1vw, 0.85rem);
+  }
+  #nav-dots, .slide-footer { display: none; }
+}
+
+@media (max-height: 500px) {
+  :root {
+    --pad: clamp(0.6rem, 2vw, 1.5rem);
+    --t-title: clamp(1.2rem, 4vw, 2.2rem);
+    --t-h2: clamp(1rem, 2.2vw, 1.4rem);
+    --t-body: clamp(0.62rem, 1vw, 0.78rem);
+  }
+}
+
+@media (max-width: 680px) {
+  .two-col, .two-col-3-2 { grid-template-columns: 1fr; }
+  .reg-grid { grid-template-columns: repeat(2, 1fr); }
+  .pipeline { flex-direction: column; align-items: flex-start; }
+  .pipe-arrow { transform: rotate(90deg); align-self: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.2s !important; }
+  html { scroll-behavior: auto; }
+}
+</style>
+</head>
+<body>
+
+<!-- Progress bar -->
+<div id="progress-bar"></div>
+
+<!-- Navigation dots (populated by JS) -->
+<nav id="nav-dots" aria-label="Slide navigation"></nav>
+
+<!-- =====================================================
+     SLIDE 1 — TITLE
+     ===================================================== -->
+<section class="slide" id="s1" data-label="Title">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">SKY130 · Serial Transceiver · Tiny Tapeout</div>
+    <h1 class="title reveal d2">
+      Single-Lane<br><span class="accent">SerDes</span> PHY
+    </h1>
+    <div class="divider reveal d3"></div>
+    <p class="subtitle reveal d4">
+      240 Mbps Manchester-encoded differential transceiver on the SKY130 open-source node.
+      Integrated PLL, CDR, dual FIFOs, and PRBS-7 self-test.
+    </p>
+    <div class="pills reveal d5">
+      <span class="pill">240 Mbps</span>
+      <span class="pill">Manchester CDR</span>
+      <span class="pill">Ring-Osc PLL · 10×</span>
+      <span class="pill">Bang-Bang CDR</span>
+      <span class="pill">I²C Config</span>
+      <span class="pill">PRBS-7</span>
+      <span class="pill">Analog Loopback</span>
+    </div>
+    <div class="stats-row reveal d6">
+      <div class="stat">
+        <div class="stat-val">240<span class="unit">Mbps</span></div>
+        <div class="stat-label">Line Rate</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">24<span class="unit">MHz</span></div>
+        <div class="stat-label">Ref Clock</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">1.8<span class="unit">V</span></div>
+        <div class="stat-label">Digital VDD</div>
+      </div>
+      <div class="stat">
+        <div class="stat-val">8</div>
+        <div class="stat-label">CSR Regs</div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">SKY130 SerDes PHY — Design Overview</span>
+    <span class="footer-num">01 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 2 — DEVICE OVERVIEW
+     ===================================================== -->
+<section class="slide" id="s2" data-label="Overview">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Device Overview</div>
+    <h2 class="slide-title reveal d2">What Is the SKY130 SerDes PHY?</h2>
+    <div class="two-col-3-2">
+      <div>
+        <ul class="feature-list">
+          <li class="reveal d2">
+            <div><strong>Single-lane differential transceiver</strong> at 240 Mbps using a 100 Ω differential CML I/O pair (TXP/TXN, RXP/RXN).</div>
+          </li>
+          <li class="reveal d3">
+            <div><strong>Manchester line coding</strong> for DC balance and embedded clock — every bit contains a guaranteed transition, enabling clock recovery without a separate clock signal.</div>
+          </li>
+          <li class="reveal d3">
+            <div><strong>Ring-oscillator PLL</strong> multiplies the 24 MHz reference by 10× to generate the 240 MHz TX serializer clock. Lock time ≈ 8 µs.</div>
+          </li>
+          <li class="reveal d4">
+            <div><strong>Bang-bang CDR</strong> (Alexander architecture) recovers clock from the incoming data stream. Acquisition range ±2000 ppm, lock time ≤ 100 µs.</div>
+          </li>
+          <li class="reveal d4">
+            <div><strong>Dual 8-word FIFOs</strong> (TX and RX) with 4-bit external interface bridge the 24 MHz control domain and 240 MHz serial domain.</div>
+          </li>
+          <li class="reveal d5">
+            <div><strong>PRBS-7 generator and checker</strong> enable loopback self-test without external equipment. Configured via 8 I²C registers at address 0x42.</div>
+          </li>
+        </ul>
+      </div>
+      <div class="reveal d3">
+        <div class="card">
+          <div class="card-title">Applications</div>
+          <ul class="feature-list">
+            <li>FPGA / ASIC prototyping links</li>
+            <li>Multi-chip module serial buses</li>
+            <li>Educational SerDes demonstration</li>
+            <li>Tiny Tapeout SoC integration</li>
+          </ul>
+        </div>
+        <div class="card" style="margin-top: var(--gap-sm);">
+          <div class="card-title">Supply</div>
+          <div style="font-family:var(--mono); font-size:var(--t-small); color:var(--text); line-height:1.6;">
+            DVDD: <span class="accent">1.8 V</span><br>
+            AVDD: <span class="accent">3.3 V</span><br>
+            Active: <span class="accent">~12 mA</span><br>
+            Idle: <span class="muted">&lt;200 µA</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Device Overview</span>
+    <span class="footer-num">02 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 3 — SYSTEM ARCHITECTURE
+     ===================================================== -->
+<section class="slide" id="s3" data-label="Architecture">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">System Architecture</div>
+    <h2 class="slide-title reveal d2">PCS + PMA Hierarchy</h2>
+    <div class="two-col reveal d3" style="align-items:start; margin-top: var(--gap-sm);">
+      <!-- Left: Block diagram -->
+      <div>
+        <div class="arch-diagram">
+          <!-- Top level -->
+          <div class="arch-row">
+            <div class="arch-block accent-border" style="width:100%;">
+              <div>serdesphy_top</div>
+              <div class="block-sub">Top-Level Integrator + Clock Distribution</div>
+            </div>
+          </div>
+          <div class="arch-arrow-v"></div>
+          <!-- TT Wrapper -->
+          <div class="arch-row">
+            <div class="arch-block" style="width:100%; border-color: rgba(255,140,66,0.3);">
+              <div>tt_um_raybello_serdesphy_top</div>
+              <div class="block-sub">Tiny Tapeout IO Wrapper (ui_in / uo_out / uio)</div>
+            </div>
+          </div>
+          <div class="arch-arrow-v"></div>
+          <!-- PCS + PMA side by side -->
+          <div class="arch-row" style="align-items:flex-start; gap: var(--gap);">
+            <div class="arch-group" style="flex:1;">
+              <div class="arch-group-label">PCS — Digital</div>
+              <div class="arch-row">
+                <div class="arch-block" style="font-size:clamp(0.55rem,0.95vw,0.72rem);">TX Top<div class="block-sub">FIFO·MUX·Codec</div></div>
+                <div class="arch-block" style="font-size:clamp(0.55rem,0.95vw,0.72rem);">RX Top<div class="block-sub">Codec·FIFO·Align</div></div>
+              </div>
+              <div class="arch-block" style="width:100%; font-size:clamp(0.55rem,0.95vw,0.72rem);">CSR Top (I²C Slave + Registers)<div class="block-sub">Addrs 0x00–0x07</div></div>
+            </div>
+            <div class="arch-group" style="flex:1;">
+              <div class="arch-group-label">PMA — Analog</div>
+              <div class="arch-block" style="width:100%; font-size:clamp(0.55rem,0.95vw,0.72rem);">TX Diff Driver<div class="block-sub">CML 100Ω</div></div>
+              <div class="arch-block blue-border" style="width:100%; font-size:clamp(0.55rem,0.95vw,0.72rem);">PLL · 24→240 MHz<div class="block-sub">PFD·CP·LPF·VCO÷10</div></div>
+              <div class="arch-block blue-border" style="width:100%; font-size:clamp(0.55rem,0.95vw,0.72rem);">CDR · Bang-Bang<div class="block-sub">Alexander PD·VCO</div></div>
+              <div class="arch-block" style="width:100%; font-size:clamp(0.55rem,0.95vw,0.72rem);">RX Diff Receiver<div class="block-sub">Limiting Amp</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <!-- Right: key interface signals -->
+      <div>
+        <h3 class="section-title" style="margin-bottom:var(--gap-sm);">PCS ↔ PMA Interface</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>Signal Group</th><th>Count</th></tr>
+          <tr><td class="key">PLL control</td><td class="val-accent">5 sig</td></tr>
+          <tr><td class="key">CDR control</td><td class="val-accent">3 sig</td></tr>
+          <tr><td class="key">TX serializer ctrl/status</td><td class="val-accent">7 sig</td></tr>
+          <tr><td class="key">RX deserializer ctrl/status</td><td class="val-accent">7 sig</td></tr>
+          <tr><td class="key">Clock outputs</td><td class="val-accent">clk_240m_tx, _rx</td></tr>
+        </table>
+        <div style="font-family:var(--mono); font-size:var(--t-mono); color:var(--sub); line-height:1.7;">
+          <span class="accent">clk_240m_tx</span> ← PLL VCO<br>
+          <span class="accent">clk_240m_rx</span> ← CDR VCO<br>
+          <span class="muted">Independent recovered clock</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">System Architecture</span>
+    <span class="footer-num">03 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 4 — CLOCK ARCHITECTURE
+     ===================================================== -->
+<section class="slide" id="s4" data-label="Clocks">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Clock Architecture</div>
+    <h2 class="slide-title reveal d2">Three Independent Clock Domains</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm);">
+      <!-- 3-card clock domains -->
+      <div style="display:flex; flex-direction:column; gap:var(--gap-sm);">
+        <div class="card">
+          <div class="card-title">CLK_24M — Reference Domain</div>
+          <div class="card-body">All CSRs, FIFO control, word assembler/disassembler, Manchester codec, PRBS gen/check, POR logic.</div>
+        </div>
+        <div class="card" style="border-color:rgba(0,128,255,0.3);">
+          <div class="card-title" style="color:var(--accent2);">CLK_240M_TX — Transmit Domain</div>
+          <div class="card-body">Serializer shift register, TX differential driver. <span style="color:var(--accent2);">Source: PLL VCO output.</span></div>
+        </div>
+        <div class="card" style="border-color:rgba(0,212,170,0.3);">
+          <div class="card-title">CLK_240M_RX — Receive Domain</div>
+          <div class="card-body">Deserializer shift register, RX data capture. <span style="color:var(--accent);">Source: CDR VCO (recovered from data).</span></div>
+        </div>
+      </div>
+      <!-- PLL spec table -->
+      <div>
+        <h3 class="section-title" style="margin-bottom:var(--gap-sm);">PLL Specifications</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>Parameter</th><th>Typ</th><th>Unit</th></tr>
+          <tr><td class="key">Input frequency</td><td>24.0</td><td class="val-accent">MHz</td></tr>
+          <tr><td class="key">Output frequency</td><td>240</td><td class="val-accent">MHz</td></tr>
+          <tr><td class="key">Multiply ratio</td><td>10×</td><td>—</td></tr>
+          <tr><td class="key">Lock time</td><td>~8</td><td class="val-accent">µs</td></tr>
+          <tr><td class="key">Jitter (RMS)</td><td>50</td><td class="val-accent">ps</td></tr>
+          <tr><td class="key">VCO tuning range</td><td>200–400</td><td class="val-accent">MHz</td></tr>
+        </table>
+        <div class="card" style="border-color:rgba(107,127,163,0.2);">
+          <div class="card-title" style="color:var(--sub);">CDC Mechanisms</div>
+          <div class="card-body" style="font-family:var(--mono);">
+            • Dual-flop reset sync (<span style="color:var(--text);">reset_synchronizer</span>)<br>
+            • Gray-code pointer FIFOs (TX + RX)<br>
+            • No combinatorial CDC paths
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Clock Architecture</span>
+    <span class="footer-num">04 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 5 — TRANSMIT DATAPATH
+     ===================================================== -->
+<section class="slide" id="s5" data-label="TX Path">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Transmit Datapath</div>
+    <h2 class="slide-title reveal d2">4-bit Parallel → 240 Mbps Serial</h2>
+    <!-- Pipeline -->
+    <div class="pipeline reveal d3">
+      <div class="pipe-stage">
+        <div class="stage-num">01</div>
+        <div class="stage-name">Word<br>Assembler</div>
+        <div class="stage-note">4b→8b</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="stage-num">02</div>
+        <div class="stage-name">TX FIFO</div>
+        <div class="stage-note">8×8b deep</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage" style="border-color:rgba(255,140,66,0.4);">
+        <div class="stage-num">03</div>
+        <div class="stage-name">Data MUX</div>
+        <div class="stage-note">FIFO/PRBS</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="stage-num">04</div>
+        <div class="stage-name">Manchester<br>Encoder</div>
+        <div class="stage-note">8b→16b</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage" style="border-color:rgba(0,128,255,0.4);">
+        <div class="stage-num">05</div>
+        <div class="stage-name">Serializer</div>
+        <div class="stage-note">240 MHz</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage" style="border-color:rgba(0,128,255,0.4);">
+        <div class="stage-num">06</div>
+        <div class="stage-name">CML Driver</div>
+        <div class="stage-note">TXP/TXN</div>
+      </div>
+    </div>
+    <div class="two-col reveal d4" style="margin-top:var(--gap);">
+      <div>
+        <h3 class="section-title">Stage Details</h3>
+        <ul class="feature-list">
+          <li><strong>Word Assembler:</strong> Two consecutive 4-bit nibbles (CLK_24M) → 8-bit word. FSM: WAIT_N0 → WAIT_N1 → READY.</li>
+          <li><strong>TX FIFO:</strong> 8-entry × 8-bit, single clock domain. Full threshold: 7. Overflow → FIFO_ERR (sticky).</li>
+          <li><strong>Data MUX:</strong> Selects FIFO output or PRBS-7 generator. TX_IDLE overrides both (all zeros).</li>
+          <li><strong>Serializer:</strong> 16-bit shift register clocked at 240 MHz (15 ns/bit). One 8-bit word → 16 serial bits @ 4.17 ns/symbol.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="section-title">TX FIFO Parameters</h3>
+        <table class="data-table">
+          <tr><th>Parameter</th><th>Value</th></tr>
+          <tr><td class="key">Depth</td><td>8 words</td></tr>
+          <tr><td class="key">Internal width</td><td class="val-accent">8 bits</td></tr>
+          <tr><td class="key">External width</td><td class="val-accent">4 bits</td></tr>
+          <tr><td class="key">Write clock</td><td>24 MHz</td></tr>
+          <tr><td class="key">Effective write rate</td><td>12 MHz <span class="muted">(gated)</span></td></tr>
+          <tr><td class="key">Overflow action</td><td class="warn">FIFO_ERR + discard</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Transmit Datapath</span>
+    <span class="footer-num">05 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 6 — MANCHESTER ENCODING
+     ===================================================== -->
+<section class="slide" id="s6" data-label="Manchester">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Line Coding</div>
+    <h2 class="slide-title reveal d2">Manchester Encoding</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <h3 class="section-title">Encoding Rules</h3>
+        <ul class="feature-list" style="margin-bottom:var(--gap);">
+          <li><strong>Logic 0</strong> → High-to-Low transition at bit center <span class="note">(symbol: 10)</span></li>
+          <li><strong>Logic 1</strong> → Low-to-High transition at bit center <span class="note">(symbol: 01)</span></li>
+          <li>Every bit contains <strong>exactly one transition</strong> — clock embedded in data</li>
+          <li>Symbol rate doubles: 1 bit → 2 symbols at 240 Mbaud</li>
+        </ul>
+        <h3 class="section-title">Encoding Properties</h3>
+        <table class="data-table">
+          <tr><th>Property</th><th>Value</th></tr>
+          <tr><td class="key">DC balance</td><td class="val-accent">±0 over any 2 symbols</td></tr>
+          <tr><td class="key">Transition density</td><td class="val-accent">100%</td></tr>
+          <tr><td class="key">Max run length</td><td>1 symbol</td></tr>
+          <tr><td class="key">Symbol rate</td><td>240 Mbaud</td></tr>
+          <tr><td class="key">Bit rate</td><td class="val-accent">120 Mbps effective</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3 class="section-title" style="margin-bottom:var(--gap-sm);">Waveform Example</h3>
+        <!-- ASCII waveform diagram -->
+        <div class="code-block" style="margin-bottom:var(--gap);">
+<span class="cm">// Data: 1    0    1    1    0</span>
+<span class="cm">// Symbol:  01  10  01  01  10</span>
+
+<span class="kw">DATA</span>: ‾‾‾|___|‾‾‾|‾‾‾|___|
+<span class="kw">TX  </span>: _‾|‾_|_‾|_‾|‾_|
+         <span class="val">↑   ↑   ↑   ↑   ↑</span>
+         <span class="cm">mid-bit transitions</span>
+        </div>
+        <div class="card">
+          <div class="card-title">Why Manchester?</div>
+          <div class="card-body">
+            DC-free signalling avoids transformer saturation and AC-coupled link baseline wander.
+            Guaranteed transitions enable the bang-bang CDR to lock without a preamble or training sequence.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Manchester Encoding</span>
+    <span class="footer-num">06 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 7 — RECEIVE DATAPATH
+     ===================================================== -->
+<section class="slide" id="s7" data-label="RX Path">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Receive Datapath</div>
+    <h2 class="slide-title reveal d2">240 Mbps Serial → 4-bit Parallel</h2>
+    <div class="pipeline reveal d3">
+      <div class="pipe-stage" style="border-color:rgba(0,128,255,0.4);">
+        <div class="stage-num">01</div>
+        <div class="stage-name">Diff RX</div>
+        <div class="stage-note">~10 mV sens.</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage" style="border-color:rgba(0,128,255,0.4);">
+        <div class="stage-num">02</div>
+        <div class="stage-name">CDR<br>Phase Det.</div>
+        <div class="stage-note">Bang-Bang</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="stage-num">03</div>
+        <div class="stage-name">Deserializer</div>
+        <div class="stage-note">16-bit SR</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="stage-num">04</div>
+        <div class="stage-name">Manchester<br>Decoder</div>
+        <div class="stage-note">16b→8b</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="stage-num">05</div>
+        <div class="stage-name">RX FIFO</div>
+        <div class="stage-note">CDC 240→24M</div>
+      </div>
+      <div class="pipe-arrow">→</div>
+      <div class="pipe-stage">
+        <div class="stage-num">06</div>
+        <div class="stage-name">Word<br>Disassem.</div>
+        <div class="stage-note">8b→4b</div>
+      </div>
+    </div>
+    <div class="two-col reveal d4" style="margin-top:var(--gap);">
+      <div>
+        <h3 class="section-title">Stage Details</h3>
+        <ul class="feature-list">
+          <li><strong>Diff RX:</strong> Limiting amplifier with ≈10 mV sensitivity. Supports analog loopback (LPBK_EN).</li>
+          <li><strong>Deserializer:</strong> 16-bit shift register clocked by recovered 240 MHz CDR clock. Outputs 16-bit word per 16 cycles.</li>
+          <li><strong>Manchester Decoder:</strong> Validates biphase symbols; raises error flag on invalid patterns. 16b → 8b decoded data.</li>
+          <li><strong>RX FIFO:</strong> Dual-clock FIFO bridges 240 MHz RX domain → 24 MHz core domain. Overflow/underflow → FIFO_ERR.</li>
+          <li><strong>Word Disassembler:</strong> 8b word → two sequential 4-bit nibbles on RXD[3:0]. RX_VALID strobes each nibble.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="section-title">Alignment FSM</h3>
+        <div class="fsm-row" style="margin-bottom:var(--gap);">
+          <div class="fsm-state">IDLE</div>
+          <div class="fsm-arrow">→</div>
+          <div class="fsm-state">SEARCH</div>
+          <div class="fsm-arrow">→</div>
+          <div class="fsm-state active">ALIGNED</div>
+        </div>
+        <div class="card">
+          <div class="card-title">CDR Specifications</div>
+          <div style="font-family:var(--mono); font-size:var(--t-mono); color:var(--text); line-height:1.7;">
+            Acq range: <span class="accent">±2000 ppm</span><br>
+            Lock time: <span class="accent">≤100 µs</span><br>
+            Bandwidth: <span class="accent">~1 MHz</span><br>
+            Phase err: <span class="muted">&lt;10 UI RMS</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Receive Datapath</span>
+    <span class="footer-num">07 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 8 — CDR ARCHITECTURE
+     ===================================================== -->
+<section class="slide" id="s8" data-label="CDR">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Clock Data Recovery</div>
+    <h2 class="slide-title reveal d2">Alexander Bang-Bang CDR</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <h3 class="section-title">Architecture</h3>
+        <p class="subtitle" style="margin-bottom:var(--gap);">
+          The Alexander (bang-bang) phase detector samples the incoming data at three points: early, on-time, and late. Comparing early vs. late samples determines whether the recovered clock leads or lags the data transitions.
+        </p>
+        <ul class="feature-list">
+          <li><strong>Phase error:</strong> Binary — only magnitude of 1 step per update. No linear phase error term.</li>
+          <li><strong>Loop gain</strong> set by CDR_GAIN[2:0] register (0x3–0x6 recommended). Higher gain → wider bandwidth, less noise immunity.</li>
+          <li><strong>Fast lock mode</strong> (CDR_FAST_LOCK=1): Doubles loop gain during acquisition. Lock detection threshold halved from 1200 to 600 cycles.</li>
+          <li><strong>CDR VCO</strong> tracks ±2000 ppm around 240 MHz. Control word is 8-bit digital.</li>
+        </ul>
+        <h3 class="section-title" style="margin-top:var(--gap);">CDR FSM</h3>
+        <div class="fsm-row">
+          <div class="fsm-state">RESET</div>
+          <div class="fsm-arrow">→</div>
+          <div class="fsm-state">ACQUIRE</div>
+          <div class="fsm-arrow">→</div>
+          <div class="fsm-state">TRACK</div>
+          <div class="fsm-arrow">→</div>
+          <div class="fsm-state active">LOCKED</div>
+        </div>
+      </div>
+      <div>
+        <h3 class="section-title">CDR Config Register (0x05)</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>Bits</th><th>Name</th><th>Description</th></tr>
+          <tr><td class="val-accent">[2:0]</td><td>CDR_GAIN</td><td class="key">Loop gain (0x4 default)</td></tr>
+          <tr><td class="val-accent">[3]</td><td>CDR_FAST_LOCK</td><td class="key">2× gain in acquisition</td></tr>
+          <tr><td class="val-accent">[4]</td><td>CDR_RST</td><td class="key">Active-high reset</td></tr>
+        </table>
+        <div class="card">
+          <div class="card-title">Lock Condition</div>
+          <div class="card-body">
+            CDR_LOCK asserts when phase error &lt; 0.1 UI for &gt; 64 consecutive recovered bits. Exposed on STATUS[1] and OUT5 pin.
+          </div>
+        </div>
+        <div class="card" style="margin-top:var(--gap-sm);">
+          <div class="card-title">Tracking</div>
+          <div class="card-body">
+            Once locked, tracking bandwidth ≈ 1 MHz. The bang-bang nature introduces limit-cycle jitter — mitigate by reducing CDR_GAIN when lock is stable.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">CDR Architecture</span>
+    <span class="footer-num">08 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 9 — PLL ARCHITECTURE
+     ===================================================== -->
+<section class="slide" id="s9" data-label="PLL">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Transmit PLL</div>
+    <h2 class="slide-title reveal d2">Ring-Oscillator Integer-N PLL</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <!-- PLL block diagram (CSS) -->
+        <div class="arch-diagram">
+          <div class="arch-row">
+            <div class="arch-block">CLK_REF<div class="block-sub">24 MHz</div></div>
+            <div class="pipe-arrow" style="padding: 0 0.5rem;">→</div>
+            <div class="arch-block accent-border">Phase/Freq Det.<div class="block-sub">PFD</div></div>
+          </div>
+          <div class="arch-arrow-v"></div>
+          <div class="arch-row">
+            <div class="arch-block accent-border">Charge Pump<div class="block-sub">CP_CURRENT[1:0]</div></div>
+            <div class="pipe-arrow" style="padding: 0 0.5rem;">→</div>
+            <div class="arch-block accent-border">Loop Filter<div class="block-sub">vco_control[7:0]</div></div>
+          </div>
+          <div class="arch-arrow-v"></div>
+          <div class="arch-row">
+            <div class="arch-block blue-border">Ring-Osc VCO<div class="block-sub">VCO_TRIM[3:0]</div></div>
+            <div class="pipe-arrow" style="padding: 0 0.5rem;">→</div>
+            <div class="arch-block" style="border-color:rgba(0,212,170,0.5);">CLK_240M_TX<div class="block-sub">Output</div></div>
+          </div>
+          <div class="arch-row" style="margin-top:0.4rem;">
+            <div class="arch-block" style="font-size:clamp(0.55rem,0.95vw,0.72rem);">÷10 Freq Divider<div class="block-sub">Feedback to PFD</div></div>
+          </div>
+        </div>
+        <div class="fsm-row" style="margin-top:var(--gap-sm);">
+          <div class="fsm-state">RESET</div>
+          <div class="fsm-arrow">→</div>
+          <div class="fsm-state">ACQUIRE<div style="font-size:0.7em; color:var(--sub);">240 cycles</div></div>
+          <div class="fsm-arrow">→</div>
+          <div class="fsm-state">TRACK</div>
+          <div class="fsm-arrow">→</div>
+          <div class="fsm-state active">LOCKED</div>
+        </div>
+      </div>
+      <div>
+        <h3 class="section-title">PLL Config Register (0x04)</h3>
+        <table class="data-table" style="margin-bottom:var(--gap-sm);">
+          <tr><th>Bits</th><th>Name</th><th>Description</th></tr>
+          <tr><td class="val-accent">[3:0]</td><td>VCO_TRIM</td><td class="key">Coarse freq trim (0x8=240 MHz)</td></tr>
+          <tr><td class="val-accent">[5:4]</td><td>CP_CURRENT</td><td class="key">Charge pump current (0x2=40 µA)</td></tr>
+          <tr><td class="val-accent">[6]</td><td>PLL_RST</td><td class="key">Active-high reset</td></tr>
+          <tr><td class="val-accent">[7]</td><td>PLL_BYPASS</td><td class="key">Bypass for test</td></tr>
+        </table>
+        <h3 class="section-title">VCO_TRIM Encoding</h3>
+        <table class="data-table" style="margin-bottom:var(--gap-sm);">
+          <tr><th>Value</th><th>VCO Freq</th></tr>
+          <tr><td class="val-accent">0x0</td><td>~200 MHz</td></tr>
+          <tr><td class="val-accent">0x8</td><td>~240 MHz <span class="muted">(nominal)</span></td></tr>
+          <tr><td class="val-accent">0xF</td><td>~400 MHz</td></tr>
+        </table>
+        <h3 class="section-title">CP_CURRENT</h3>
+        <table class="data-table">
+          <tr><th>Value</th><th>Current</th></tr>
+          <tr><td>0x0</td><td>10 µA</td></tr>
+          <tr><td>0x1</td><td>20 µA</td></tr>
+          <tr><td class="val-accent">0x2</td><td class="val-accent">40 µA (default)</td></tr>
+          <tr><td>0x3</td><td>80 µA</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">PLL Architecture</span>
+    <span class="footer-num">09 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 10 — FIFO & CDC
+     ===================================================== -->
+<section class="slide" id="s10" data-label="FIFO / CDC">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Clock Domain Crossing</div>
+    <h2 class="slide-title reveal d2">FIFO Buffering & CDC Strategy</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <h3 class="section-title">Three Independent Domains</h3>
+        <div style="font-family:var(--mono); font-size:var(--t-mono); line-height:1.9; margin-bottom:var(--gap);">
+          <span class="accent">24 MHz</span> — CSR / control / codec<br>
+          <span class="accent2">240 MHz TX</span> — serializer (PLL clock)<br>
+          <span class="accent">240 MHz RX</span> — deserializer (CDR clock)
+        </div>
+        <h3 class="section-title">TX FIFO (single-clock)</h3>
+        <ul class="feature-list" style="margin-bottom:var(--gap);">
+          <li>8-entry × 8-bit. Both ports in 24 MHz domain.</li>
+          <li>Serializer reads on empty: underflow → FIFO_ERR sticky.</li>
+          <li>Overflow action: discard write, assert FIFO_ERR.</li>
+        </ul>
+        <h3 class="section-title">RX FIFO (dual-clock)</h3>
+        <ul class="feature-list">
+          <li>Write port: 240 MHz RX domain (CDR clock).</li>
+          <li>Read port: 24 MHz domain (core clock).</li>
+          <li>Gray-code pointers prevent metastability on full/empty flags.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="section-title">Reset Synchronizer</h3>
+        <div class="code-block" style="margin-bottom:var(--gap);">
+<span class="cm">// serdesphy_reset_synchronizer</span>
+<span class="cm">// Dual-flop per domain</span>
+
+<span class="kw">rst_n_24m</span>     ← rst_n_in   (24M)
+<span class="kw">rst_n_240m_tx</span> ← pll_rst    (TX)
+<span class="kw">rst_n_240m_rx</span> ← cdr_rst    (RX)
+
+<span class="cm">// Sequential release order:</span>
+<span class="val">1.</span> assert RST_N_IN
+<span class="val">2.</span> release PLL reset → wait PLL_LOCK
+<span class="val">3.</span> release CDR reset → wait CDR_LOCK
+        </div>
+        <div class="card">
+          <div class="card-title">CDC Rules</div>
+          <div class="card-body">
+            No combinatorial CDC paths. All control signals cross via dual-flop synchronizers. Data crosses only through gray-coded FIFOs.
+            Status sticky bits (PRBS_ERR, FIFO_ERR) clear on register read.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">FIFO &amp; Clock Domain Crossing</span>
+    <span class="footer-num">10 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 11 — PRBS-7 SELF-TEST
+     ===================================================== -->
+<section class="slide" id="s11" data-label="PRBS-7">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Built-In Self-Test</div>
+    <h2 class="slide-title reveal d2">PRBS-7 Generator & Checker</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <h3 class="section-title">Generator (TX Side)</h3>
+        <div class="code-block" style="margin-bottom:var(--gap);">
+<span class="cm">// LFSR polynomial: x⁷ + x⁶ + 1</span>
+<span class="kw">feedback</span> = lfsr[<span class="val">6</span>] ^ lfsr[<span class="val">5</span>];
+lfsr &lt;&lt;= 1;
+lfsr[<span class="val">0</span>] = feedback;
+
+<span class="cm">// Output: 8-bit parallel @ 24 MHz</span>
+<span class="cm">// Initial state: 0x7F (all ones)</span>
+<span class="cm">// Bypasses TX FIFO when enabled</span>
+        </div>
+        <h3 class="section-title">Checker (RX Side)</h3>
+        <ul class="feature-list">
+          <li>Maintains local LFSR, compares with decoded 8-bit words.</li>
+          <li>Single-bit error detection per 8-bit word.</li>
+          <li>Error counter: 8-bit, saturates at 255. Reset via RX_ALIGN_RST.</li>
+          <li>PRBS_ERR flag: sticky, clears on STATUS register read.</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="section-title">Self-Test Procedure</h3>
+        <ol class="seq-list">
+          <li>Enable PHY: <span class="accent">PHY_EN=1</span>, wait PLL_LOCK.</li>
+          <li>Enable TX PRBS: <span class="accent">TX_PRBS_EN=1, TX_EN=1</span>.</li>
+          <li>Set TX data select: <span class="accent">TX_DATA_SEL=0</span> (PRBS source).</li>
+          <li>Release CDR reset, wait <span class="accent">CDR_LOCK</span> on STATUS[1].</li>
+          <li>Enable RX checker: <span class="accent">RX_PRBS_CHK_EN=1, RX_EN=1</span>.</li>
+          <li>Monitor <span class="warn">STATUS[6] (PRBS_ERR)</span> — should stay low.</li>
+          <li>Inject error (loopback off) → verify PRBS_ERR asserts.</li>
+        </ol>
+        <div class="card" style="margin-top:var(--gap-sm);">
+          <div class="card-title">Loopback Path</div>
+          <div class="card-body">
+            Set <span style="color:var(--text);">LPBK_EN=1</span> to route TXP/TXN internally to RXP/RXN through the analog loopback switch. Full end-to-end test without external cabling.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">PRBS-7 Self-Test</span>
+    <span class="footer-num">11 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 12 — I²C REGISTER MAP
+     ===================================================== -->
+<section class="slide" id="s12" data-label="Registers">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Configuration Interface</div>
+    <h2 class="slide-title reveal d2">I²C Register Map — Addr 0x42</h2>
+    <div class="reg-grid reveal d3">
+      <div class="reg-card">
+        <div class="reg-addr">0x00</div>
+        <div class="reg-name">PHY_ENABLE</div>
+        <div class="reg-desc">PHY_EN [0], ISO_EN [1]. Global power gate + analog isolation.</div>
+      </div>
+      <div class="reg-card">
+        <div class="reg-addr">0x01</div>
+        <div class="reg-name">TX_CONFIG</div>
+        <div class="reg-desc">TX_EN, TX_FIFO_EN, TX_PRBS_EN, TX_IDLE. Controls TX data source selection.</div>
+      </div>
+      <div class="reg-card">
+        <div class="reg-addr">0x02</div>
+        <div class="reg-name">RX_CONFIG</div>
+        <div class="reg-desc">RX_EN, RX_FIFO_EN, RX_PRBS_CHK_EN, RX_ALIGN_RST (self-clearing).</div>
+      </div>
+      <div class="reg-card">
+        <div class="reg-addr">0x03</div>
+        <div class="reg-name">DATA_SELECT</div>
+        <div class="reg-desc">TX_DATA_SEL [0]: 0=PRBS, 1=FIFO. RX_DATA_SEL [1]: 0=FIFO, 1=PRBS status.</div>
+      </div>
+      <div class="reg-card">
+        <div class="reg-addr">0x04</div>
+        <div class="reg-name">PLL_CONFIG</div>
+        <div class="reg-desc">VCO_TRIM[3:0], CP_CURRENT[1:0], PLL_RST[6], PLL_BYPASS[7].</div>
+      </div>
+      <div class="reg-card">
+        <div class="reg-addr">0x05</div>
+        <div class="reg-name">CDR_CONFIG</div>
+        <div class="reg-desc">CDR_GAIN[2:0], CDR_FAST_LOCK[3], CDR_RST[4]. Gain range: 0x3–0x6 recommended.</div>
+      </div>
+      <div class="reg-card" style="border-color:rgba(0,212,170,0.3);">
+        <div class="reg-addr" style="color:var(--sub);">0x06 R/O</div>
+        <div class="reg-name">STATUS</div>
+        <div class="reg-desc">PLL_LOCK, CDR_LOCK, TX/RX FIFO full/empty, PRBS_ERR, FIFO_ERR. Sticky bits clear on read.</div>
+      </div>
+      <div class="reg-card">
+        <div class="reg-addr">0x07</div>
+        <div class="reg-name">DEBUG_ENABLE</div>
+        <div class="reg-desc">DBG_VCTRL, DBG_PD, DBG_FIFO. Routes one analog signal to DBG_ANA pin. One source at a time only.</div>
+      </div>
+    </div>
+    <div class="reveal d4" style="margin-top:var(--gap); display:flex; gap:var(--gap);">
+      <div class="code-block" style="flex:1;">
+<span class="cm">// I²C Write format:</span>
+START | <span class="val">0x42</span>+W | ACK | <span class="kw">REG_ADDR</span> | ACK | <span class="reg">DATA</span> | ACK | STOP
+<span class="cm">// I²C Read format:</span>
+START | <span class="val">0x42</span>+W | ACK | <span class="kw">REG_ADDR</span> | ACK | Rstart | <span class="val">0x42</span>+R | ACK | <span class="reg">DATA</span> | NACK | STOP
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">I²C Register Map</span>
+    <span class="footer-num">12 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 13 — POWER-ON SEQUENCE
+     ===================================================== -->
+<section class="slide" id="s13" data-label="Power-On">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Power Management</div>
+    <h2 class="slide-title reveal d2">Power-On Reset Sequence</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <h3 class="section-title">POR FSM States</h3>
+        <div class="fsm-row" style="flex-direction:column; align-items:flex-start; gap:0.5rem; margin-bottom:var(--gap);">
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <div class="fsm-state">RESET</div>
+            <span class="muted" style="font-size:var(--t-small);">All held in reset</span>
+          </div>
+          <div style="padding-left:1rem; color:var(--sub); font-size:var(--t-mono);">↓</div>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <div class="fsm-state">WAIT_SUPPLY</div>
+            <span class="muted" style="font-size:var(--t-small);">Debounce ~2 µs</span>
+          </div>
+          <div style="padding-left:1rem; color:var(--sub); font-size:var(--t-mono);">↓</div>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <div class="fsm-state">SEQUENCING</div>
+            <span class="muted" style="font-size:var(--t-small);">Release isolation → digital → analog</span>
+          </div>
+          <div style="padding-left:1rem; color:var(--sub); font-size:var(--t-mono);">↓</div>
+          <div style="display:flex; align-items:center; gap:0.5rem;">
+            <div class="fsm-state active">READY</div>
+            <span class="muted" style="font-size:var(--t-small);">Normal operation + supply monitoring</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Supply Inputs</div>
+          <div class="card-body">
+            DVDD_OK: 1.8 V digital supply stable.<br>
+            AVDD_OK: 3.3 V analog supply stable.<br>
+            Both must be asserted before SEQUENCING begins.<br>
+            Supply loss mid-operation → RESET state.
+          </div>
+        </div>
+      </div>
+      <div>
+        <h3 class="section-title">Output Signals</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>Signal</th><th>Role</th></tr>
+          <tr><td class="val-accent">POWER_GOOD</td><td class="key">All supplies OK</td></tr>
+          <tr><td class="val-accent">ANALOG_ISO_N</td><td class="key">De-asserts bias disconnect</td></tr>
+          <tr><td class="val-accent">DIGITAL_RESET_N</td><td class="key">Digital core reset</td></tr>
+          <tr><td class="val-accent">ANALOG_RESET_N</td><td class="key">PLL / CDR reset</td></tr>
+          <tr><td class="val-accent">POR_ACTIVE</td><td class="key">POR in progress</td></tr>
+          <tr><td class="val-accent">POR_COMPLETE</td><td class="key">Sequencing done</td></tr>
+        </table>
+        <div class="card">
+          <div class="card-title">Sequencing Rule</div>
+          <div class="card-body">
+            ISO_EN must de-assert before digital reset. Prevents inrush into unpowered analog bias circuits. PHY_EN must be 0 until POR_COMPLETE.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Power-On Reset</span>
+    <span class="footer-num">13 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 14 — LOOPBACK TEST FLOW
+     ===================================================== -->
+<section class="slide" id="s14" data-label="Test Flow">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Typical Application</div>
+    <h2 class="slide-title reveal d2">Loopback Self-Test Configuration</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <h3 class="section-title">Initialization Sequence</h3>
+        <ol class="seq-list">
+          <li>Apply AVDD, then DVDD. <span class="note">Supply sequencing required.</span></li>
+          <li>Assert RST_N low for ≥10 CLK_REF cycles.</li>
+          <li>Write <span class="accent">0x01</span> → PHY_ENABLE <span class="note">(PHY_EN=1)</span></li>
+          <li>Write <span class="accent">0x00</span> → PLL_CONFIG[6] <span class="note">(release PLL reset)</span></li>
+          <li>Poll STATUS[0] until <span class="accent">PLL_LOCK</span> asserts. <span class="note">~8 µs</span></li>
+          <li>Write <span class="accent">0x05</span> → TX_CONFIG <span class="note">(TX_EN + TX_PRBS_EN)</span></li>
+          <li>Write <span class="accent">0x00</span> → DATA_SELECT <span class="note">(PRBS source)</span></li>
+          <li>Write <span class="accent">0x00</span> → CDR_CONFIG[4] <span class="note">(release CDR reset)</span></li>
+          <li>Write <span class="accent">0x05</span> → RX_CONFIG <span class="note">(RX_EN + RX_PRBS_CHK_EN)</span></li>
+          <li>Poll STATUS[1] until <span class="accent">CDR_LOCK</span> asserts. <span class="note">≤100 µs</span></li>
+          <li>Monitor STATUS[6] — <span class="warn">PRBS_ERR should remain low.</span></li>
+        </ol>
+      </div>
+      <div>
+        <h3 class="section-title">Register Write Summary</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>Step</th><th>Reg</th><th>Value</th></tr>
+          <tr><td>3</td><td class="val-accent">0x00</td><td>0x01</td></tr>
+          <tr><td>4</td><td class="val-accent">0x04</td><td>0x28 <span class="muted">(PLL_RST=0)</span></td></tr>
+          <tr><td>6</td><td class="val-accent">0x01</td><td>0x05 <span class="muted">(TX_EN+PRBS_EN)</span></td></tr>
+          <tr><td>7</td><td class="val-accent">0x03</td><td>0x00 <span class="muted">(PRBS src)</span></td></tr>
+          <tr><td>8</td><td class="val-accent">0x05</td><td>0x04 <span class="muted">(CDR_RST=0)</span></td></tr>
+          <tr><td>9</td><td class="val-accent">0x02</td><td>0x05 <span class="muted">(RX_EN+CHK_EN)</span></td></tr>
+        </table>
+        <div class="card">
+          <div class="card-title">Loopback Enable</div>
+          <div class="card-body">
+            Set LPBK_EN (IO6 pin) high to connect TXP/TXN → RXP/RXN through the analog loopback switch before step 8. Allows full datapath test without external loopback fixture.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Loopback Self-Test</span>
+    <span class="footer-num">14 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 15 — PIN ASSIGNMENT
+     ===================================================== -->
+<section class="slide" id="s15" data-label="Pins">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Package Interface</div>
+    <h2 class="slide-title reveal d2">24-Pin QFN Assignment</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <h3 class="section-title">Inputs (IN0–IN7)</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>Pin</th><th>Symbol</th><th>Description</th></tr>
+          <tr><td>IN0</td><td class="val-accent">CLK_REF</td><td class="key">24 MHz ref, 50% duty CMOS</td></tr>
+          <tr><td>IN1</td><td class="val-accent">RST_N</td><td class="key">Active-low async reset</td></tr>
+          <tr><td>IN2–5</td><td class="val-accent">TXD[3:0]</td><td class="key">4-bit TX data (CMOS)</td></tr>
+          <tr><td>IN6</td><td class="val-accent">TX_VALID</td><td class="key">TX data valid strobe</td></tr>
+          <tr><td>IN7</td><td class="val-accent">TEST_MODE</td><td class="key">Test mode enable</td></tr>
+        </table>
+        <h3 class="section-title">Outputs (OUT0–OUT7)</h3>
+        <table class="data-table">
+          <tr><th>Pin</th><th>Symbol</th><th>Description</th></tr>
+          <tr><td>OUT0–3</td><td class="val-accent">RXD[3:0]</td><td class="key">4-bit RX data (CMOS)</td></tr>
+          <tr><td>OUT4</td><td class="val-accent">PLL_LOCK</td><td class="key">PLL frequency lock</td></tr>
+          <tr><td>OUT5</td><td class="val-accent">CDR_LOCK</td><td class="key">CDR phase lock</td></tr>
+          <tr><td>OUT6</td><td class="val-accent">PRBS_ERR</td><td class="key">PRBS error (latched)</td></tr>
+          <tr><td>OUT7</td><td class="val-accent">RX_VALID</td><td class="key">RX data valid strobe</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3 class="section-title">Bidirectional (IO0–IO7)</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>Pin</th><th>Symbol</th><th>Description</th></tr>
+          <tr><td>IO0</td><td class="val-accent">SDA</td><td class="key">I²C data (open-drain)</td></tr>
+          <tr><td>IO1</td><td class="val-accent">SCL</td><td class="key">I²C clock ≤24 MHz</td></tr>
+          <tr><td>IO2</td><td class="val-accent">TXP</td><td class="key">TX diff (+) CML 100Ω</td></tr>
+          <tr><td>IO3</td><td class="val-accent">TXN</td><td class="key">TX diff (−) CML 100Ω</td></tr>
+          <tr><td>IO4</td><td class="val-accent">RXP</td><td class="key">RX diff (+) CML 100Ω</td></tr>
+          <tr><td>IO5</td><td class="val-accent">RXN</td><td class="key">RX diff (−) CML 100Ω</td></tr>
+          <tr><td>IO6</td><td class="val-accent">LPBK_EN</td><td class="key">Analog loopback enable</td></tr>
+          <tr><td>IO7</td><td class="val-accent">DBG_ANA</td><td class="key">Analog debug output</td></tr>
+        </table>
+        <div class="card">
+          <div class="card-title">Package</div>
+          <div class="card-body">
+            24-pin QFN · 4×4 mm · 0.5 mm pitch<br>
+            Exposed pad: 2.5×2.5 mm (GND)<br>
+            P/N: SKY130-SERDES-240M<br>
+            Temp: −40°C to +85°C
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Pin Assignment</span>
+    <span class="footer-num">15 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 16 — ELECTRICAL CHARACTERISTICS
+     ===================================================== -->
+<section class="slide" id="s16" data-label="Electrical">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Electrical Characteristics</div>
+    <h2 class="slide-title reveal d2">DC Parameters & Operating Conditions</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <h3 class="section-title">Recommended Operating Conditions</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>Parameter</th><th>Min</th><th>Typ</th><th>Max</th><th>Unit</th></tr>
+          <tr><td class="key">DVDD</td><td>1.71</td><td class="val-accent">1.8</td><td>1.89</td><td>V</td></tr>
+          <tr><td class="key">AVDD</td><td>3.0</td><td class="val-accent">3.3</td><td>3.6</td><td>V</td></tr>
+          <tr><td class="key">T_A</td><td>−40</td><td>25</td><td>85</td><td>°C</td></tr>
+          <tr><td class="key">CLK_REF</td><td>23.5</td><td class="val-accent">24.0</td><td>24.5</td><td>MHz</td></tr>
+        </table>
+        <h3 class="section-title">Absolute Maximum Ratings</h3>
+        <table class="data-table">
+          <tr><th>Parameter</th><th>Min</th><th>Max</th></tr>
+          <tr><td class="key">DVDD</td><td>−0.3</td><td class="warn">2.0 V</td></tr>
+          <tr><td class="key">AVDD</td><td>−0.3</td><td class="warn">3.6 V</td></tr>
+          <tr><td class="key">Digital input</td><td>−0.3</td><td>DVDD+0.3</td></tr>
+          <tr><td class="key">Diff input (RXP/N)</td><td>−0.5</td><td>AVDD+0.5</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3 class="section-title">DC Characteristics</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>Parameter</th><th>Min</th><th>Typ</th><th>Unit</th></tr>
+          <tr><td class="key">V_IH (digital)</td><td>0.7×DVDD</td><td>—</td><td>V</td></tr>
+          <tr><td class="key">V_IL (digital)</td><td>—</td><td>0.3×DVDD</td><td>V</td></tr>
+          <tr><td class="key">Diff input sens.</td><td class="val-accent">10</td><td>—</td><td>mV_pp</td></tr>
+          <tr><td class="key">Diff output swing</td><td>400</td><td class="val-accent">600</td><td>mV_pp</td></tr>
+          <tr><td class="key">I_DD active</td><td>—</td><td class="val-accent">12</td><td>mA</td></tr>
+          <tr><td class="key">I_DD idle</td><td>—</td><td>100</td><td>µA</td></tr>
+        </table>
+        <div class="card">
+          <div class="card-title">I²C Timing</div>
+          <div style="font-family:var(--mono); font-size:var(--t-mono); color:var(--text); line-height:1.7;">
+            f_SCL max: <span class="accent">24 MHz</span><br>
+            t_LOW/HIGH min: <span class="accent">0.5 µs</span><br>
+            SDA setup: <span class="accent">100 ns</span><br>
+            SDA hold: <span class="muted">0 ns</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Electrical Characteristics</span>
+    <span class="footer-num">16 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 17 — TINY TAPEOUT INTEGRATION
+     ===================================================== -->
+<section class="slide" id="s17" data-label="Tiny Tapeout">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Tiny Tapeout Integration</div>
+    <h2 class="slide-title reveal d2">tt_um_raybello_serdesphy_top Wrapper</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <h3 class="section-title">IO Mapping</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>TT Signal</th><th>SerDes Pin</th></tr>
+          <tr><td class="val-accent">ui_in[0]</td><td class="key">CLK_REF (24 MHz)</td></tr>
+          <tr><td class="val-accent">ui_in[1]</td><td class="key">RST_N</td></tr>
+          <tr><td class="val-accent">ui_in[5:2]</td><td class="key">TXD[3:0]</td></tr>
+          <tr><td class="val-accent">ui_in[6]</td><td class="key">TX_VALID</td></tr>
+          <tr><td class="val-accent">ui_in[7]</td><td class="key">TEST_MODE</td></tr>
+          <tr><td class="val-accent">uo_out[3:0]</td><td class="key">RXD[3:0]</td></tr>
+          <tr><td class="val-accent">uo_out[4]</td><td class="key">PLL_LOCK</td></tr>
+          <tr><td class="val-accent">uo_out[5]</td><td class="key">CDR_LOCK</td></tr>
+          <tr><td class="val-accent">uo_out[6]</td><td class="key">PRBS_ERR</td></tr>
+          <tr><td class="val-accent">uo_out[7]</td><td class="key">RX_VALID</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3 class="section-title">Bidirectional IO Mapping</h3>
+        <table class="data-table" style="margin-bottom:var(--gap);">
+          <tr><th>TT Signal</th><th>SerDes Pin</th></tr>
+          <tr><td class="val-accent">uio[0]</td><td class="key">SDA (I²C)</td></tr>
+          <tr><td class="val-accent">uio[1]</td><td class="key">SCL (I²C)</td></tr>
+          <tr><td class="val-accent">uio[2]</td><td class="key">TXP</td></tr>
+          <tr><td class="val-accent">uio[3]</td><td class="key">TXN</td></tr>
+          <tr><td class="val-accent">uio[4]</td><td class="key">RXP</td></tr>
+          <tr><td class="val-accent">uio[5]</td><td class="key">RXN</td></tr>
+          <tr><td class="val-accent">uio[6]</td><td class="key">LPBK_EN</td></tr>
+          <tr><td class="val-accent">uio[7]</td><td class="key">DBG_ANA</td></tr>
+        </table>
+        <div class="code-block">
+<span class="cm">// project.v wrapper pattern</span>
+<span class="kw">assign</span> clk_ref_24m = ui_in[<span class="val">0</span>];
+<span class="kw">assign</span> rst_n       = ui_in[<span class="val">1</span>];
+<span class="kw">assign</span> tx_data     = ui_in[<span class="val">5:2</span>];
+<span class="kw">assign</span> uo_out[<span class="val">4</span>]  = pll_lock;
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">Tiny Tapeout Integration</span>
+    <span class="footer-num">17 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     SLIDE 18 — SUMMARY
+     ===================================================== -->
+<section class="slide" id="s18" data-label="Summary">
+  <div class="slide-content">
+    <div class="eyebrow reveal d1">Design Summary</div>
+    <h2 class="slide-title reveal d2">SKY130 SerDes PHY — What We Built</h2>
+    <div class="two-col reveal d3" style="margin-top:var(--gap-sm); align-items:start;">
+      <div>
+        <ul class="feature-list" style="margin-bottom:var(--gap);">
+          <li><strong>240 Mbps single-lane transceiver</strong> on the open-source SKY130 process node. Manchester encoding provides DC balance and embedded clock recovery.</li>
+          <li><strong>Integrated transmit PLL</strong>: ring-oscillator VCO with 10× multiplication (24→240 MHz), charge-pump architecture, configurable VCO trim and CP current via I²C.</li>
+          <li><strong>Bang-bang CDR</strong> (Alexander architecture) with ±2000 ppm acquisition range and configurable loop gain for bandwidth/noise trade-off.</li>
+          <li><strong>PRBS-7 self-test</strong> engine (generator + checker) enables bit-error measurement without external equipment, using analog loopback path.</li>
+          <li><strong>Full I²C control</strong> at 0x42: 8 registers covering enable, TX/RX config, PLL/CDR tuning, status, and debug signal routing.</li>
+          <li><strong>Tiny Tapeout compatible</strong>: all 24 SerDes signals mapped to ui_in/uo_out/uio with a thin wrapper in project.v.</li>
+        </ul>
+      </div>
+      <div>
+        <div class="card" style="margin-bottom:var(--gap-sm);">
+          <div class="card-title">Design Metrics</div>
+          <div style="font-family:var(--mono); font-size:var(--t-small); color:var(--text); line-height:1.9;">
+            Modules: <span class="accent">~44 Verilog files</span><br>
+            Domains: <span class="accent">3</span> (24M, 240M TX, 240M RX)<br>
+            CSR: <span class="accent">8 registers × 8 bits</span><br>
+            FIFOs: <span class="accent">2 × 8-entry dual-clock</span><br>
+            Loopback: <span class="accent">Analog + digital paths</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="card-title">Revision</div>
+          <div class="card-body">
+            v0.0.1 · December 2025 · Ray Bello<br>
+            Part: SKY130-SERDES-240M<br>
+            24-pin QFN · −40°C to +85°C
+          </div>
+        </div>
+        <div class="pills" style="margin-top:var(--gap-sm);">
+          <span class="pill">SKY130</span>
+          <span class="pill">Open Source PDK</span>
+          <span class="pill">Tiny Tapeout</span>
+          <span class="pill">v0.0.1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="slide-footer">
+    <span class="footer-label">SKY130 SerDes PHY — Design Overview</span>
+    <span class="footer-num">18 / 18</span>
+  </div>
+</section>
+
+<!-- =====================================================
+     JAVASCRIPT — Presentation Controller
+     ===================================================== -->
+<script>
+class SlidePresentation {
+  constructor() {
+    this.slides = Array.from(document.querySelectorAll('.slide'));
+    this.total  = this.slides.length;
+    this.current = 0;
+    this.scrolling = false;
+
+    this.progressBar = document.getElementById('progress-bar');
+    this.navDots     = document.getElementById('nav-dots');
+
+    this.buildDots();
+    this.observe();
+    this.bindKeys();
+    this.bindWheel();
+    this.bindTouch();
+    this.update(0);
+  }
+
+  /* Build navigation dots */
+  buildDots() {
+    this.slides.forEach((s, i) => {
+      const dot = document.createElement('button');
+      dot.className = 'dot';
+      dot.setAttribute('aria-label', `Go to slide ${i + 1}: ${s.dataset.label || ''}`);
+      dot.addEventListener('click', () => this.goTo(i));
+      this.navDots.appendChild(dot);
+    });
+  }
+
+  /* Intersection Observer for animations */
+  observe() {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          e.target.classList.add('visible');
+          const idx = this.slides.indexOf(e.target);
+          if (idx !== -1) this.update(idx);
+        }
+      });
+    }, { threshold: 0.5 });
+    this.slides.forEach(s => io.observe(s));
+  }
+
+  /* Update progress bar + nav dots */
+  update(idx) {
+    this.current = idx;
+    const pct = ((idx + 1) / this.total) * 100;
+    this.progressBar.style.width = pct + '%';
+    this.navDots.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === idx);
+    });
+  }
+
+  /* Navigate to specific slide */
+  goTo(idx) {
+    if (idx < 0 || idx >= this.total) return;
+    this.slides[idx].scrollIntoView({ behavior: 'smooth' });
+  }
+
+  /* Keyboard navigation */
+  bindKeys() {
+    document.addEventListener('keydown', e => {
+      switch (e.key) {
+        case 'ArrowDown': case 'ArrowRight': case ' ':
+          e.preventDefault(); this.goTo(this.current + 1); break;
+        case 'ArrowUp': case 'ArrowLeft':
+          e.preventDefault(); this.goTo(this.current - 1); break;
+        case 'Home':
+          e.preventDefault(); this.goTo(0); break;
+        case 'End':
+          e.preventDefault(); this.goTo(this.total - 1); break;
+      }
+    });
+  }
+
+  /* Mouse wheel navigation with debounce */
+  bindWheel() {
+    let timer = null;
+    document.addEventListener('wheel', e => {
+      e.preventDefault();
+      if (timer) return;
+      timer = setTimeout(() => { timer = null; }, 800);
+      if (e.deltaY > 0) this.goTo(this.current + 1);
+      else              this.goTo(this.current - 1);
+    }, { passive: false });
+  }
+
+  /* Touch swipe navigation */
+  bindTouch() {
+    let startY = 0;
+    document.addEventListener('touchstart', e => {
+      startY = e.touches[0].clientY;
+    }, { passive: true });
+    document.addEventListener('touchend', e => {
+      const dy = startY - e.changedTouches[0].clientY;
+      if (Math.abs(dy) > 50) {
+        if (dy > 0) this.goTo(this.current + 1);
+        else        this.goTo(this.current - 1);
+      }
+    }, { passive: true });
+  }
+}
+
+/* Start on DOMContentLoaded */
+document.addEventListener('DOMContentLoaded', () => {
+  new SlidePresentation();
+});
+</script>
+</body>
+</html>
