@@ -42,7 +42,10 @@ module serdesphy_ana_cdr (
     
     // Alexander phase detector model
     always @(posedge clk_240m_rx or negedge rst_n) begin
-        if (!rst_n || cdr_rst) begin
+        if (!rst_n) begin
+            early_sample <= 0;
+            late_sample <= 0;
+        end else if (cdr_rst) begin
             early_sample <= 0;
             late_sample <= 0;
         end else if (enable) begin
@@ -51,10 +54,12 @@ module serdesphy_ana_cdr (
             late_sample <= serial_data;   // Sample at late phase
         end
     end
-    
+
     // Phase detector output
     always @(posedge clk_240m_rx or negedge rst_n) begin
-        if (!rst_n || cdr_rst) begin
+        if (!rst_n) begin
+            phase_detector_reg <= 8'h80;  // Mid-scale
+        end else if (cdr_rst) begin
             phase_detector_reg <= 8'h80;  // Mid-scale
         end else if (enable) begin
             // Bang-bang phase detector logic
@@ -67,15 +72,15 @@ module serdesphy_ana_cdr (
             end
         end
     end
-    
+
     // CDR state machine
     always @(posedge clk_240m_rx or negedge rst_n) begin
-        if (!rst_n || cdr_rst) begin
+        if (!rst_n) begin
             cdr_state <= STATE_RESET;
             cdr_lock_reg <= 0;
             vco_control_reg <= 8'h80;  // Mid-scale
             lock_counter <= 11'h000;
-        end else if (!enable) begin
+        end else if (cdr_rst || !enable) begin
             cdr_state <= STATE_RESET;
             cdr_lock_reg <= 0;
             lock_counter <= 11'h000;
