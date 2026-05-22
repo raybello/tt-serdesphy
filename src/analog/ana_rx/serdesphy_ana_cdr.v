@@ -31,7 +31,7 @@ module serdesphy_ana_cdr (
     reg [7:0]  vco_control_reg;
     reg [7:0]  phase_detector_reg;
     reg [1:0]  cdr_state;
-    reg [9:0]  lock_counter;
+    reg [10:0] lock_counter;
     reg        early_sample, late_sample;
     
     // State encoding
@@ -74,17 +74,17 @@ module serdesphy_ana_cdr (
             cdr_state <= STATE_RESET;
             cdr_lock_reg <= 0;
             vco_control_reg <= 8'h80;  // Mid-scale
-            lock_counter <= 10'h000;
+            lock_counter <= 11'h000;
         end else if (!enable) begin
             cdr_state <= STATE_RESET;
             cdr_lock_reg <= 0;
-            lock_counter <= 10'h000;
+            lock_counter <= 11'h000;
         end else begin
             case (cdr_state)
                 STATE_RESET: begin
                     vco_control_reg <= 8'h80;
                     cdr_state <= STATE_ACQUIRE;
-                    lock_counter <= 10'h000;
+                    lock_counter <= 11'h000;
                 end
                 
                 STATE_ACQUIRE: begin
@@ -99,7 +99,7 @@ module serdesphy_ana_cdr (
                     lock_counter <= lock_counter + 1;
                     
                     // Check for lock after sufficient time
-                    if (lock_counter >= (cdr_fast_lock ? 10'd600 : 10'd1200)) begin
+                    if (lock_counter >= (cdr_fast_lock ? 11'd600 : 11'd1200)) begin
                         cdr_state <= STATE_LOCKED;
                         cdr_lock_reg <= 1;
                     end
