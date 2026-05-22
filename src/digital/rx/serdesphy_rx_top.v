@@ -208,17 +208,11 @@ module serdesphy_rx_top (
             rx_state <= RX_STATE_DISABLED;
             rx_active_reg <= 1'b0;
             rx_error_reg <= 1'b0;
-            rx_aligned_reg <= 1'b0;
             error_count <= 3'd0;
-            overflow_sticky <= 1'b0;
-            underflow_sticky <= 1'b0;
-            manchester_error_sticky <= 1'b0;
-            serial_error_sticky <= 1'b0;
         end else begin
             case (rx_state)
                 RX_STATE_DISABLED: begin
                     rx_active_reg <= 1'b0;
-                    rx_aligned_reg <= 1'b0;
                     if (rx_en && clk_240m_rx_en) begin
                         rx_state <= RX_STATE_ALIGNING;
                     end
@@ -228,10 +222,8 @@ module serdesphy_rx_top (
                     if (!rx_en || !clk_240m_rx_en) begin
                         rx_state <= RX_STATE_DISABLED;
                     end else if (rx_align_rst) begin
-                        align_state <= ALIGN_STATE_SEARCH;
-                        align_count <= 8'd0;
-                        verify_count <= 8'd0;
-                    end else if (rx_aligned_reg) begin
+                        // handled in alignment FSM
+                    end else if (!rx_align_rst && rx_aligned_reg) begin
                         rx_state <= RX_STATE_ACQUIRING;
                     end else begin
                         // Alignment logic in separate always block
@@ -241,7 +233,6 @@ module serdesphy_rx_top (
                 RX_STATE_ACQUIRING: begin
                     if (!rx_en || !clk_240m_rx_en) begin
                         rx_state <= RX_STATE_DISABLED;
-                        rx_aligned_reg <= 1'b0;
                     end else if (manchester_data_valid) begin
                         rx_active_reg <= 1'b1;
                         rx_state <= RX_STATE_ACTIVE;
@@ -289,7 +280,7 @@ module serdesphy_rx_top (
             align_count <= 8'd0;
             verify_count <= 8'd0;
             rx_aligned_reg <= 1'b0;
-        end else if (rx_align_rst) begin
+        end else if (rx_align_rst || rx_state == RX_STATE_DISABLED || rx_state == RX_STATE_ERROR) begin
             align_state <= ALIGN_STATE_SEARCH;
             align_count <= 8'd0;
             verify_count <= 8'd0;

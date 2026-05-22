@@ -107,6 +107,8 @@ module serdesphy_tx_top (
     wire        mux_prbs_ready;
     wire        mux_output_ready;
 
+    assign mux_output_ready = 1'b1;
+
     // Instantiate word assembler
     serdesphy_word_assembler u_word_assembler (
         .clk            (clk_24m),
@@ -185,9 +187,6 @@ module serdesphy_tx_top (
             tx_active_reg <= 1'b0;
             tx_error_reg <= 1'b0;
             error_count <= 3'd0;
-            overflow_sticky <= 1'b0;
-            underflow_sticky <= 1'b0;
-            manchester_error_sticky <= 1'b0;
         end else begin
             case (tx_state)
                 TX_STATE_DISABLED: begin
