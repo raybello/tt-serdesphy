@@ -60,8 +60,12 @@ module serdesphy_rx_fifo (
             wr_ptr_gray_next = wr_ptr_binary_next;
             wr_ptr_gray_next = wr_ptr_gray_next ^ (wr_ptr_gray_next >> 1);
             wr_ptr_gray <= wr_ptr_gray_next;
-            
-            // Write data to FIFO
+        end
+    end
+
+    // FIFO memory write (separate block — keeps $memwr cell ADDR/DATA always driven)
+    always @(posedge wr_clk) begin
+        if (wr_enable && wr_valid && !full_flag) begin
             fifo_mem[wr_ptr_binary[ADDR_WIDTH-1:0]] <= wr_data;
         end
     end

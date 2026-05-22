@@ -34,32 +34,19 @@ module serdesphy_prbs_generator (
     localparam STATE_READY   = 2'b10;
     localparam STATE_OUTPUT  = 2'b11;
     
-    // PRBS-7 LFSR polynomial: x^7 + x^6 + 1
-    // Feedback: bit 6 XOR bit 5 (using 0-based indexing)
-    function [6:0] lfsr_next;
-        input [6:0] current_state;
-        begin
-            lfsr_next = {current_state[5:0], 
-                        current_state[6] ^ current_state[5]};
-        end
-    endfunction
-    
-    // Generate 8-bit PRBS sequence
-    function [7:0] generate_8bit_prbs;
-        input [6:0] initial_state;
-        reg [6:0] temp_state;
-        integer i;
-        begin
-            temp_state = initial_state;
-            generate_8bit_prbs = 8'b0;
-            
-            for (i = 0; i < 8; i = i + 1) begin
-                generate_8bit_prbs[i] = temp_state[6];  // Output MSB
-                temp_state = lfsr_next(temp_state);
-            end
-        end
-    endfunction
-    
+    // Unrolled PRBS-7 computation from current prbs_shift_reg.
+    // Each output bit is the MSB of the LFSR after i steps; the new LFSR
+    // state is the lower 7 bits of the 8-bit output (bits [6:0]).
+    wire [7:0] prbs_next_byte = {prbs_shift_reg[6] ^ prbs_shift_reg[5],
+                                  prbs_shift_reg[0], prbs_shift_reg[1],
+                                  prbs_shift_reg[2], prbs_shift_reg[3],
+                                  prbs_shift_reg[4], prbs_shift_reg[5],
+                                  prbs_shift_reg[6]};
+    wire [6:0] prbs_next_state = {prbs_shift_reg[0], prbs_shift_reg[1],
+                                   prbs_shift_reg[2], prbs_shift_reg[3],
+                                   prbs_shift_reg[4], prbs_shift_reg[5],
+                                   prbs_shift_reg[6]};
+
     // PRBS generator state machine
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -85,10 +72,8 @@ module serdesphy_prbs_generator (
                 end
                 
                 STATE_GENERATE: begin
-                    // Generate 8-bit PRBS sequence
-                    output_data_reg <= generate_8bit_prbs(prbs_shift_reg);
-                    // Update LFSR state for next cycle
-                    prbs_shift_reg <= generate_8bit_prbs(prbs_shift_reg);
+                    output_data_reg <= prbs_next_byte;
+                    prbs_shift_reg  <= prbs_next_state;
                     generator_state <= STATE_READY;
                 end
                 

@@ -35,27 +35,6 @@ module serdesphy_manchester_encoder (
     localparam STATE_READY      = 2'b10;
     localparam STATE_OUTPUT     = 2'b11;
     
-    // Manchester encoding logic
-    function [15:0] encode_manchester;
-        input [7:0] data;
-        integer i;
-        begin
-            encode_manchester = 16'b0;
-            for (i = 0; i < 8; i = i + 1) begin
-                // Each bit becomes 2 symbols
-                if (data[i] == 1'b0) begin
-                    // Logic 0: High-to-Low transition (10)
-                    encode_manchester[2*i+1] = 1'b1;  // First symbol: High
-                    encode_manchester[2*i]   = 1'b0;  // Second symbol: Low
-                end else begin
-                    // Logic 1: Low-to-High transition (01)
-                    encode_manchester[2*i+1] = 1'b0;  // First symbol: Low
-                    encode_manchester[2*i]   = 1'b1;  // Second symbol: High
-                end
-            end
-        end
-    endfunction
-    
     // State machine for encoding process
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -76,8 +55,17 @@ module serdesphy_manchester_encoder (
                 end
                 
                 STATE_ENCODING: begin
-                    // Perform Manchester encoding
-                    encoded_data_reg <= encode_manchester(input_data_reg);
+                    // Logic 0 → 10 (High-to-Low), Logic 1 → 01 (Low-to-High)
+                    encoded_data_reg <= {
+                        input_data_reg[7] ? 2'b01 : 2'b10,
+                        input_data_reg[6] ? 2'b01 : 2'b10,
+                        input_data_reg[5] ? 2'b01 : 2'b10,
+                        input_data_reg[4] ? 2'b01 : 2'b10,
+                        input_data_reg[3] ? 2'b01 : 2'b10,
+                        input_data_reg[2] ? 2'b01 : 2'b10,
+                        input_data_reg[1] ? 2'b01 : 2'b10,
+                        input_data_reg[0] ? 2'b01 : 2'b10
+                    };
                     encode_state <= STATE_READY;
                 end
                 

@@ -201,16 +201,14 @@ module serdesphy_tx_top (
                         tx_state <= TX_STATE_DISABLED;
                     end else if (tx_idle) begin
                         tx_active_reg <= 1'b0;
-                        tx_idle_pattern_reg <= 1'b1;
-                    end else if ((tx_fifo_en && word_assembler_valid) || 
+                    end else if ((tx_fifo_en && word_assembler_valid) ||
                                (tx_prbs_en && prbs_data_valid)) begin
                         tx_state <= TX_STATE_STARTING;
                     end
                 end
-                
+
                 TX_STATE_STARTING: begin
                     tx_active_reg <= 1'b1;
-                    tx_idle_pattern_reg <= 1'b0;
                     if (manchester_encoder_valid) begin
                         tx_state <= TX_STATE_ACTIVE;
                     end
@@ -298,19 +296,23 @@ module serdesphy_tx_top (
                 serial_bit_count <= 4'd12;
                 tx_serial_data_reg <= manchester_encoder_out[15];
                 tx_serial_valid_reg <= 1'b1;
+                tx_idle_pattern_reg <= 1'b0;
             end else if (serial_bit_count > 0) begin
                 // Shift out remaining bits
                 serial_shift_reg <= {serial_shift_reg[2:0], 1'b0};
                 serial_bit_count <= serial_bit_count - 1;
                 tx_serial_data_reg <= serial_shift_reg[3];
                 tx_serial_valid_reg <= 1'b1;
+                tx_idle_pattern_reg <= 1'b0;
             end else begin
                 tx_serial_data_reg <= 1'b0;
                 tx_serial_valid_reg <= 1'b0;
+                tx_idle_pattern_reg <= 1'b0;
             end
         end else begin
             tx_serial_data_reg <= 1'b0;
             tx_serial_valid_reg <= 1'b0;
+            tx_idle_pattern_reg <= 1'b0;
         end
     end
     

@@ -43,31 +43,19 @@ module serdesphy_prbs_checker (
     localparam STATE_ERROR       = 2'b10;
     localparam STATE_READY       = 2'b11;
     
-    // PRBS-7 LFSR polynomial: x^7 + x^6 + 1
-    function [6:0] lfsr_next;
-        input [6:0] current_state;
-        begin
-            lfsr_next = {current_state[5:0], 
-                        current_state[6] ^ current_state[5]};
-        end
-    endfunction
-    
-    // Generate expected 8-bit PRBS sequence
-    function [7:0] generate_expected_prbs;
-        input [6:0] initial_state;
-        reg [6:0] temp_state;
-        integer i;
-        begin
-            temp_state = initial_state;
-            generate_expected_prbs = 8'b0;
-            
-            for (i = 0; i < 8; i = i + 1) begin
-                generate_expected_prbs[i] = temp_state[6];  // Output MSB
-                temp_state = lfsr_next(temp_state);
-            end
-        end
-    endfunction
-    
+    // Unrolled PRBS-7 computation from current prbs_shift_reg.
+    // Matches generate_expected_prbs(): each output bit is the MSB of the
+    // LFSR after i steps; the new LFSR state is the lower 7 bits (bits [6:0]).
+    wire [7:0] prbs_next_byte = {prbs_shift_reg[6] ^ prbs_shift_reg[5],
+                                  prbs_shift_reg[0], prbs_shift_reg[1],
+                                  prbs_shift_reg[2], prbs_shift_reg[3],
+                                  prbs_shift_reg[4], prbs_shift_reg[5],
+                                  prbs_shift_reg[6]};
+    wire [6:0] prbs_next_state = {prbs_shift_reg[0], prbs_shift_reg[1],
+                                   prbs_shift_reg[2], prbs_shift_reg[3],
+                                   prbs_shift_reg[4], prbs_shift_reg[5],
+                                   prbs_shift_reg[6]};
+
     // PRBS checker state machine
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -96,11 +84,9 @@ module serdesphy_prbs_checker (
                     error_detected_reg <= 0;
                     busy_flag <= 1'b0;
                     if (data_valid) begin
-                        // Generate expected PRBS
-                        expected_data_reg <= generate_expected_prbs(prbs_shift_reg);
-                        // Update LFSR for next cycle
-                        prbs_shift_reg <= generate_expected_prbs(prbs_shift_reg);
-                        checker_state <= STATE_CHECKING;
+                        expected_data_reg <= prbs_next_byte;
+                        prbs_shift_reg    <= prbs_next_state;
+                        checker_state     <= STATE_CHECKING;
                     end
                 end
                 
