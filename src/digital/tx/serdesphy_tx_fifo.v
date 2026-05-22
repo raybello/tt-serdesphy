@@ -49,8 +49,14 @@ module serdesphy_tx_fifo (
         if (!rst_n) begin
             write_ptr <= 0;
         end else if (enable && write_enable && write_valid && !full_flag) begin
-            fifo_mem[write_ptr] <= data_in;
             write_ptr <= write_ptr + 1;
+        end
+    end
+
+    // FIFO memory write (separate block — keeps $memwr cell ADDR/DATA always driven)
+    always @(posedge clk) begin
+        if (enable && write_enable && write_valid && !full_flag) begin
+            fifo_mem[write_ptr] <= data_in;
         end
     end
     
