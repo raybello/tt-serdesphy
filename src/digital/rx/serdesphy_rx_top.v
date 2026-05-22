@@ -284,7 +284,12 @@ module serdesphy_rx_top (
     
     // Alignment state machine
     always @(posedge clk_24m or negedge rst_n_24m) begin
-        if (!rst_n_24m || rx_align_rst) begin
+        if (!rst_n_24m) begin
+            align_state <= ALIGN_STATE_SEARCH;
+            align_count <= 8'd0;
+            verify_count <= 8'd0;
+            rx_aligned_reg <= 1'b0;
+        end else if (rx_align_rst) begin
             align_state <= ALIGN_STATE_SEARCH;
             align_count <= 8'd0;
             verify_count <= 8'd0;
