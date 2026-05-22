@@ -96,6 +96,7 @@ module tb ();
   assign rx_valid = uo_out[7];      // RX valid (bit 7, also dbg_ana)
   
   // Internal POR monitoring signals (for testing)
+`ifndef GL_TEST
   wire [2:0] por_state;
   wire por_active;
   wire por_complete;
@@ -105,13 +106,25 @@ module tb ();
   wire analog_reset_n;
 
   // Hierarchical access to internal POR signals
-  assign por_state = user_project.u_top.u_pcs.u_por.state;
-  assign por_active = user_project.u_top.u_pcs.u_por.por_active;
-  assign por_complete = user_project.u_top.u_pcs.u_por.por_complete_reg;
-  assign power_good = user_project.u_top.u_pcs.u_por.power_good_reg;
-  assign analog_iso_n = user_project.u_top.u_pcs.u_por.analog_iso_n_reg;
+  assign por_state      = user_project.u_top.u_pcs.u_por.state;
+  assign por_active     = user_project.u_top.u_pcs.u_por.por_active;
+  assign por_complete   = user_project.u_top.u_pcs.u_por.por_complete_reg;
+  assign power_good     = user_project.u_top.u_pcs.u_por.power_good_reg;
+  assign analog_iso_n   = user_project.u_top.u_pcs.u_por.analog_iso_n_reg;
   assign digital_reset_n = user_project.u_top.u_pcs.u_por.digital_reset_n_reg;
   assign analog_reset_n = user_project.u_top.u_pcs.u_por.analog_reset_n_reg;
+`else
+  // GL simulation: internal register paths are not accessible after synthesis.
+  // Stub signals allow reset_sequence() to exit immediately (por_complete=1)
+  // without hanging on POR_TIMEOUT_CYCLES.  POR-specific tests are skipped.
+  wire [2:0] por_state      = 3'd3;  // PORState.READY
+  wire       por_active     = 1'b0;
+  wire       por_complete   = 1'b1;
+  wire       power_good     = 1'b1;
+  wire       analog_iso_n   = 1'b1;
+  wire       digital_reset_n = 1'b1;
+  wire       analog_reset_n = 1'b1;
+`endif
 
   // DUT instantiation
   tt_um_raybello_serdesphy_top user_project (

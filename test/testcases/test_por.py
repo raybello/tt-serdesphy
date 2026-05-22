@@ -1,6 +1,7 @@
 # SerDes PHY Power-On Reset Tests
 # Tests POR_001 through POR_010
 
+import os
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, Timer, RisingEdge
@@ -11,12 +12,16 @@ from .common import (
     common_test_setup
 )
 
+# POR tests rely on hierarchical access to internal registers that are not
+# present in the gate-level netlist.  Skip the entire suite during GL_TEST.
+_GL_TEST = bool(os.getenv('GL_TEST'))
+
 
 # ============================================================================
 # POR Test Cases
 # ============================================================================
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_001_sequence_completion(dut):
     """POR_001: Verify POR sequence completes after reset release"""
     dut._log.info("=== POR_001: POR Sequence Completion Test ===")
@@ -50,7 +55,7 @@ async def test_POR_001_sequence_completion(dut):
     dut._log.info("POR_001: PASSED - POR sequence completed successfully")
 
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_002_digital_before_analog_reset(dut):
     """POR_002: Verify digital_reset_n releases before analog_reset_n"""
     dut._log.info("=== POR_002: Digital Before Analog Reset Test ===")
@@ -95,7 +100,7 @@ async def test_POR_002_digital_before_analog_reset(dut):
     dut._log.info("POR_002: PASSED - Digital reset released before analog reset")
 
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_003_analog_isolation_release(dut):
     """POR_003: Verify analog isolation is released during sequence"""
     dut._log.info("=== POR_003: Analog Isolation Release Test ===")
@@ -135,7 +140,7 @@ async def test_POR_003_analog_isolation_release(dut):
     dut._log.info("POR_003: PASSED - Analog isolation released during sequence")
 
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_004_power_good_assertion(dut):
     """POR_004: Verify power_good asserts when supplies stable"""
     dut._log.info("=== POR_004: Power Good Assertion Test ===")
@@ -166,7 +171,7 @@ async def test_POR_004_power_good_assertion(dut):
     dut._log.info("POR_004: PASSED - power_good asserted when supplies stable")
 
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_005_dvdd_loss_detection(dut):
     """POR_005: Test supply loss detection (dvdd_ok goes low during READY)"""
     dut._log.info("=== POR_005: DVDD Loss Detection Test ===")
@@ -190,7 +195,7 @@ async def test_POR_005_dvdd_loss_detection(dut):
     dut._log.info("POR_005: PASSED - Supply loss detection test (simulation limited)")
 
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_006_avdd_loss_detection(dut):
     """POR_006: Test supply loss detection (avdd_ok goes low during READY)"""
     dut._log.info("=== POR_006: AVDD Loss Detection Test ===")
@@ -212,7 +217,7 @@ async def test_POR_006_avdd_loss_detection(dut):
     dut._log.info("POR_006: PASSED - AVDD loss detection test (simulation limited)")
 
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_007_resequencing_after_recovery(dut):
     """POR_007: Verify re-sequencing after supply recovery"""
     dut._log.info("=== POR_007: Re-sequencing After Recovery Test ===")
@@ -261,7 +266,7 @@ async def test_POR_007_resequencing_after_recovery(dut):
     dut._log.info("POR_007: PASSED - Re-sequencing after recovery works correctly")
 
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_008_external_reset_any_state(dut):
     """POR_008: Test external reset (rst_n_in) at any state"""
     dut._log.info("=== POR_008: External Reset at Any State Test ===")
@@ -301,7 +306,7 @@ async def test_POR_008_external_reset_any_state(dut):
     dut._log.info("POR_008: PASSED - External reset works at any state")
 
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_009_por_active_flag(dut):
     """POR_009: Verify por_active flag during sequencing"""
     dut._log.info("=== POR_009: POR Active Flag Test ===")
@@ -354,7 +359,7 @@ async def test_POR_009_por_active_flag(dut):
     dut._log.info("POR_009: PASSED - por_active flag behaves correctly")
 
 
-@cocotb.test()
+@cocotb.test(skip=_GL_TEST)
 async def test_POR_010_por_complete_flag(dut):
     """POR_010: Verify por_complete flag in READY state"""
     dut._log.info("=== POR_010: POR Complete Flag Test ===")
