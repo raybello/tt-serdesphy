@@ -106,9 +106,7 @@ module serdesphy_rx_fifo (
     // Full/empty flag calculation
     always @(posedge rd_clk or negedge rd_rst_n) begin
         if (!rd_rst_n) begin
-            full_flag <= 0;
             empty_flag <= 1;
-            overflow_flag <= 0;
             underflow_flag <= 0;
         end else begin
             // Convert synchronized write pointer back to binary for comparison
@@ -129,6 +127,7 @@ module serdesphy_rx_fifo (
     always @(posedge wr_clk or negedge wr_rst_n) begin
         if (!wr_rst_n) begin
             full_flag <= 0;
+            overflow_flag <= 0;
         end else begin
             // Convert synchronized read pointer back to binary for comparison
             rd_ptr_binary_sync = rd_ptr_gray_sync2;
