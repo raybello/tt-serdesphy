@@ -89,3 +89,7 @@ COCOTB_TEST_MODULES = test
 
 # include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim
+
+.PHONY: png
+png: tb.fst
+	xvfb-run --auto-servernum gtkwave tb.fst tb.gtkw -S gtkwave_to_png.tcl
