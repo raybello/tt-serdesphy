@@ -33,6 +33,7 @@ module serdesphy_ana_cdr (
     reg [1:0]  cdr_state;
     reg [10:0] lock_counter;
     reg        early_sample, late_sample;
+    reg        serial_data_prev;  // One-cycle delayed sample for Alexander phase detection
     
     // State encoding
     localparam STATE_RESET    = 2'b00;
@@ -43,15 +44,19 @@ module serdesphy_ana_cdr (
     // Alexander phase detector model
     always @(posedge clk_240m_rx or negedge rst_n) begin
         if (!rst_n) begin
-            early_sample <= 0;
-            late_sample <= 0;
+            early_sample    <= 0;
+            late_sample     <= 0;
+            serial_data_prev <= 0;
         end else if (cdr_rst) begin
-            early_sample <= 0;
-            late_sample <= 0;
+            early_sample    <= 0;
+            late_sample     <= 0;
+            serial_data_prev <= 0;
         end else if (enable) begin
-            // Simplified phase sampling
-            early_sample <= serial_data;  // Sample at early phase
-            late_sample <= serial_data;   // Sample at late phase
+            // Alexander phase detector: compare current sample (late) with
+            // previous-cycle sample (early) to sense data transitions.
+            serial_data_prev <= serial_data;
+            early_sample <= serial_data_prev;  // Sample from previous cycle
+            late_sample  <= serial_data;        // Sample from current cycle
         end
     end
 

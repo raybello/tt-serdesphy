@@ -35,9 +35,9 @@ module serdesphy_tx_fifo (
     parameter FIFO_DEPTH = 8;
     parameter ADDR_WIDTH = 3;  // log2(FIFO_DEPTH)
     
-    // Internal signals
-    reg [ADDR_WIDTH-1:0] write_ptr;
-    reg [ADDR_WIDTH-1:0] read_ptr;
+    // Internal signals — extra MSB distinguishes full from empty (standard technique)
+    reg [ADDR_WIDTH:0]   write_ptr;
+    reg [ADDR_WIDTH:0]   read_ptr;
     reg [7:0]            fifo_mem [0:FIFO_DEPTH-1];
     reg                  full_flag;
     reg                  empty_flag;
@@ -56,10 +56,10 @@ module serdesphy_tx_fifo (
     // FIFO memory write (separate block — keeps $memwr cell ADDR/DATA always driven)
     always @(posedge clk) begin
         if (enable && write_enable && write_valid && !full_flag) begin
-            fifo_mem[write_ptr] <= data_in;
+            fifo_mem[write_ptr[ADDR_WIDTH-1:0]] <= data_in;
         end
     end
-    
+
     // Read pointer management
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -68,7 +68,7 @@ module serdesphy_tx_fifo (
             read_ptr <= read_ptr + 1;
         end
     end
-    
+
     // Full/empty flag calculation
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
@@ -77,26 +77,27 @@ module serdesphy_tx_fifo (
             overflow_flag <= 0;
             underflow_flag <= 0;
         end else if (enable) begin
-            // Full condition: next write would make pointers equal but with different MSB
-            full_flag <= (write_ptr == (read_ptr - 1));
-            
-            // Empty condition: pointers are equal
+            // Full: MSBs differ but address bits match (wrapped exactly once around)
+            full_flag <= (write_ptr[ADDR_WIDTH] != read_ptr[ADDR_WIDTH]) &&
+                         (write_ptr[ADDR_WIDTH-1:0] == read_ptr[ADDR_WIDTH-1:0]);
+
+            // Empty: pointers fully equal (same wrap count and same address)
             empty_flag <= (write_ptr == read_ptr);
-            
+
             // Overflow detection (write when full)
             if (write_enable && write_valid && full_flag) begin
                 overflow_flag <= 1;
             end
-            
+
             // Underflow detection (read when empty)
             if (read_enable && empty_flag) begin
                 underflow_flag <= 1;
             end
         end
     end
-    
+
     // Output assignments
-    assign data_out = fifo_mem[read_ptr];
+    assign data_out = fifo_mem[read_ptr[ADDR_WIDTH-1:0]];
     assign read_valid = enable && read_enable && !empty_flag;
     assign full = full_flag;
     assign empty = empty_flag;

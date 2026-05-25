@@ -103,8 +103,6 @@ module serdesphy_rx_top (
     reg         manchester_error_sticky;
     reg         serial_error_sticky;
     
-    // Manchester pattern detection
-    reg [1:0]   transition_pattern;
     reg         pattern_detected;
     
     // Additional interface wires
@@ -337,13 +335,18 @@ module serdesphy_rx_top (
     // Pattern detection logic
     always @(posedge clk_24m or negedge rst_n_24m) begin
         if (!rst_n_24m) begin
-            transition_pattern <= 2'b00;
             pattern_detected <= 1'b0;
         end else if (manchester_word_valid) begin
-            // Simple Manchester pattern detection: look for alternating transitions
-            // This is a simplified approach - real implementation would be more sophisticated
-            transition_pattern <= {transition_pattern[0], manchester_word_reg[0]};
-            pattern_detected <= (transition_pattern == 2'b01) || (transition_pattern == 2'b10);
+            // Valid Manchester: every 2-bit symbol (bits [2i+1:2i]) must differ,
+            // i.e. be 01 or 10 (never 00 or 11). Check all 8 symbols in the 16-bit word.
+            pattern_detected <= (manchester_word_reg[1]  ^ manchester_word_reg[0])  &&
+                                (manchester_word_reg[3]  ^ manchester_word_reg[2])  &&
+                                (manchester_word_reg[5]  ^ manchester_word_reg[4])  &&
+                                (manchester_word_reg[7]  ^ manchester_word_reg[6])  &&
+                                (manchester_word_reg[9]  ^ manchester_word_reg[8])  &&
+                                (manchester_word_reg[11] ^ manchester_word_reg[10]) &&
+                                (manchester_word_reg[13] ^ manchester_word_reg[12]) &&
+                                (manchester_word_reg[15] ^ manchester_word_reg[14]);
         end
     end
     
@@ -379,8 +382,10 @@ module serdesphy_rx_top (
     end
     
     // Output multiplexing based on rx_data_sel
-    assign rx_data = rx_data_sel ? prbs_error_count[3:0] : word_disassembler_out;
-    assign rx_valid = rx_data_sel ? 1'b1 : word_disassembler_valid;
+    // In PRBS status mode pulse rx_valid only when the decoder produces new data,
+    // preventing a permanently-asserted valid from flooding the downstream interface.
+    assign rx_data  = rx_data_sel ? prbs_error_count[3:0] : word_disassembler_out;
+    assign rx_valid = rx_data_sel ? manchester_decoder_valid : word_disassembler_valid;
     
     // Status outputs
     assign rx_fifo_full = rx_fifo_full_wire;
