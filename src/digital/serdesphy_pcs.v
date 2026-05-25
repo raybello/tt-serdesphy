@@ -292,7 +292,7 @@ descrambling etc.
 		.dbg_vctrl       (dbg_vctrl),
 		.dbg_pd          (dbg_pd),
 		.dbg_fifo        (dbg_fifo),
-		.dbg_an          (dbg_ana),
+		.dbg_ana         (dbg_ana),
 		
 		// Status inputs (only the ones defined in CSR module)
 		.tx_fifo_full    (tx_fifo_full),

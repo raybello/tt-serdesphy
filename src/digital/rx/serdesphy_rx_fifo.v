@@ -115,8 +115,8 @@ module serdesphy_rx_fifo (
         end else begin
             // Convert synchronized write pointer back to binary for comparison
             wr_ptr_binary_sync = wr_ptr_gray_sync2;
-            wr_ptr_binary_sync = wr_ptr_binary_sync ^ (wr_ptr_binary_sync >> 2);
             wr_ptr_binary_sync = wr_ptr_binary_sync ^ (wr_ptr_binary_sync >> 1);
+            wr_ptr_binary_sync = wr_ptr_binary_sync ^ (wr_ptr_binary_sync >> 2);
             
             // Empty condition: pointers are equal
             empty_flag <= (rd_ptr_gray == wr_ptr_gray_sync2);
@@ -135,8 +135,8 @@ module serdesphy_rx_fifo (
         end else begin
             // Convert synchronized read pointer back to binary for comparison
             rd_ptr_binary_sync = rd_ptr_gray_sync2;
-            rd_ptr_binary_sync = rd_ptr_binary_sync ^ (rd_ptr_binary_sync >> 2);
             rd_ptr_binary_sync = rd_ptr_binary_sync ^ (rd_ptr_binary_sync >> 1);
+            rd_ptr_binary_sync = rd_ptr_binary_sync ^ (rd_ptr_binary_sync >> 2);
             
             // Full condition: next write would make pointers point to same location
             full_flag <= ((wr_ptr_binary[ADDR_WIDTH-1:0] == rd_ptr_binary_sync[ADDR_WIDTH-1:0]) &&

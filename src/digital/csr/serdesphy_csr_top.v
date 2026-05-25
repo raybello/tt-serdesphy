@@ -45,7 +45,7 @@ module serdesphy_csr_top (
     output wire        dbg_vctrl,        // Debug VCO control voltage
     output wire        dbg_pd,           // Debug phase detector
     output wire        dbg_fifo,         // Debug FIFO status
-    output wire        dbg_an,           // Analog debug output
+    output wire        dbg_ana,          // Analog debug output
 
     // Status inputs from PHY blocks (for STATUS register 0x06)
     input  wire        tx_fifo_full,     // TX FIFO full flag
@@ -160,6 +160,6 @@ module serdesphy_csr_top (
     assign dbg_fifo  = reg_debug_enable[2];
 
     // Debug analog output (directly from debug_enable)
-    assign dbg_an = reg_debug_enable[3];
+    assign dbg_ana = reg_debug_enable[3];
 
 endmodule

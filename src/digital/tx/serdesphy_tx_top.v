@@ -62,8 +62,8 @@ module serdesphy_tx_top (
     reg         mux_data_valid;
     reg [15:0]  manchester_data_out;
     reg         manchester_data_valid;
-    reg [3:0]   serial_shift_reg;
-    reg [3:0]   serial_bit_count;
+    reg [15:0]  serial_shift_reg;
+    reg [4:0]   serial_bit_count;
     reg         tx_serial_data_reg;
     reg         tx_serial_valid_reg;
     reg         tx_idle_pattern_reg;
@@ -280,8 +280,8 @@ module serdesphy_tx_top (
     // Serial output generation (240MHz domain)
     always @(posedge clk_240m_tx or negedge rst_n_240m_tx) begin
         if (!rst_n_240m_tx) begin
-            serial_shift_reg <= 4'b0000;
-            serial_bit_count <= 4'd0;
+            serial_shift_reg <= 16'h0000;
+            serial_bit_count <= 5'd0;
             tx_serial_data_reg <= 1'b0;
             tx_serial_valid_reg <= 1'b0;
             tx_idle_pattern_reg <= 1'b1;
@@ -290,18 +290,19 @@ module serdesphy_tx_top (
                 tx_serial_data_reg <= 1'b0;
                 tx_serial_valid_reg <= 1'b0;
                 tx_idle_pattern_reg <= 1'b1;
-            end else if (manchester_encoder_valid && serial_bit_count == 4'd0) begin
-                // Load new 16-bit Manchester data
-                serial_shift_reg <= manchester_encoder_out[15:12];
-                serial_bit_count <= 4'd12;
-                tx_serial_data_reg <= manchester_encoder_out[15];
+            end else if (manchester_encoder_valid && serial_bit_count == 5'd0) begin
+                // Load full 16-bit Manchester word; output MSB immediately,
+                // pre-shift remaining 15 bits into the register
+                serial_shift_reg    <= {manchester_encoder_out[14:0], 1'b0};
+                serial_bit_count    <= 5'd15;
+                tx_serial_data_reg  <= manchester_encoder_out[15];
                 tx_serial_valid_reg <= 1'b1;
                 tx_idle_pattern_reg <= 1'b0;
-            end else if (serial_bit_count > 0) begin
-                // Shift out remaining bits
-                serial_shift_reg <= {serial_shift_reg[2:0], 1'b0};
-                serial_bit_count <= serial_bit_count - 1;
-                tx_serial_data_reg <= serial_shift_reg[3];
+            end else if (serial_bit_count > 5'd0) begin
+                // Shift out remaining bits MSB first
+                serial_shift_reg    <= {serial_shift_reg[14:0], 1'b0};
+                serial_bit_count    <= serial_bit_count - 1;
+                tx_serial_data_reg  <= serial_shift_reg[15];
                 tx_serial_valid_reg <= 1'b1;
                 tx_idle_pattern_reg <= 1'b0;
             end else begin
