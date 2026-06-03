@@ -1,10 +1,9 @@
 /*
  * SerDes PHY CDR VCO
- * Behavioral simulation model - generates ~240 MHz clock when enabled
- * In production this will be replaced with an analog oscillator.
+ * Synthesis: constant-0 placeholder (replaced by analog oscillator in silicon).
+ * Simulation: behavioral 240 MHz oscillator so the RX path has a recovered clock.
  *
- * Nominal: 240 MHz (half-period ≈ 2.083 ns with 1 ns/1 ps timescale)
- * Range:   ~227–253 MHz tracked by CDR loop (not modelled here)
+ * Nominal: 240 MHz (half-period 2.083 ns, 1 ns/1 ps timescale)
  */
 
 `default_nettype none
@@ -17,11 +16,10 @@ module serdesphy_ana_cdr_vco (
     output wire       vco_ready
 );
 
-    // Behavioral oscillator: toggles at ~240 MHz when enabled
+`ifndef SYNTHESIS
+    // Simulation-only behavioral oscillator
     reg vco_clk;
-
     initial vco_clk = 1'b0;
-
     always begin
         if (enable && rst_n)
             #2.083 vco_clk = ~vco_clk;
@@ -30,8 +28,12 @@ module serdesphy_ana_cdr_vco (
             @(posedge enable or posedge rst_n);
         end
     end
+    assign vco_out = (enable && rst_n) ? vco_clk : 1'b0;
+`else
+    // Synthesis placeholder: no oscillation (replaced by analog in tapeout)
+    assign vco_out = 1'b0;
+`endif
 
-    assign vco_out   = (enable && rst_n) ? vco_clk : 1'b0;
     assign vco_ready = rst_n & enable;
 
     // Unused input - prevent lint warnings

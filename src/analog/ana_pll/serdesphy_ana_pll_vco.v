@@ -1,10 +1,9 @@
 /*
  * SerDes PHY PLL VCO
- * Behavioral simulation model - generates ~240 MHz clock when enabled
- * In production this will be replaced with an analog ring oscillator.
+ * Synthesis: constant-0 placeholder (replaced by analog ring oscillator in silicon).
+ * Simulation: behavioral 240 MHz oscillator so the TX serializer has a clock.
  *
- * Nominal: 240 MHz (half-period ≈ 2.083 ns with 1 ns/1 ps timescale)
- * Range:   ~176–304 MHz controlled by vco_control (not modelled here)
+ * Nominal: 240 MHz (half-period 2.083 ns, 1 ns/1 ps timescale)
  */
 
 `default_nettype none
@@ -17,11 +16,10 @@ module serdesphy_ana_pll_vco (
     output wire       vco_ready
 );
 
-    // Behavioral oscillator: toggles at ~240 MHz when enabled
+`ifndef SYNTHESIS
+    // Simulation-only behavioral oscillator
     reg vco_clk;
-
     initial vco_clk = 1'b0;
-
     always begin
         if (enable && rst_n)
             #2.083 vco_clk = ~vco_clk;
@@ -30,8 +28,12 @@ module serdesphy_ana_pll_vco (
             @(posedge enable or posedge rst_n);
         end
     end
+    assign vco_out = (enable && rst_n) ? vco_clk : 1'b0;
+`else
+    // Synthesis placeholder: no oscillation (replaced by analog in tapeout)
+    assign vco_out = 1'b0;
+`endif
 
-    assign vco_out   = (enable && rst_n) ? vco_clk : 1'b0;
     assign vco_ready = rst_n & enable;
 
     // Unused input - prevent lint warnings
