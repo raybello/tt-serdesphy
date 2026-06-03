@@ -1,12 +1,10 @@
 /*
  * SerDes PHY PLL VCO
- * Placeholder behavioral model for future analog PLL VCO circuit
- * All ports are connected but the VCO does not actively oscillate
+ * Behavioral simulation model - generates ~240 MHz clock when enabled
+ * In production this will be replaced with an analog ring oscillator.
  *
- * In production, this will be replaced with an analog VCO that:
- *   - Generates 240 MHz nominal clock
- *   - Has frequency controlled by vco_control input
- *   - Range: ~176 MHz to ~304 MHz
+ * Nominal: 240 MHz (half-period ≈ 2.083 ns with 1 ns/1 ps timescale)
+ * Range:   ~176–304 MHz controlled by vco_control (not modelled here)
  */
 
 `default_nettype none
@@ -19,12 +17,21 @@ module serdesphy_ana_pll_vco (
     output wire       vco_ready
 );
 
-    // Placeholder: outputs directly driven
-    // In production, vco_out will be the oscillator output
-    // For now, tie to 0 (no oscillation)
-    assign vco_out = 1'b0;
+    // Behavioral oscillator: toggles at ~240 MHz when enabled
+    reg vco_clk;
 
-    // VCO ready when enabled and not in reset
+    initial vco_clk = 1'b0;
+
+    always begin
+        if (enable && rst_n)
+            #2.083 vco_clk = ~vco_clk;
+        else begin
+            vco_clk = 1'b0;
+            @(posedge enable or posedge rst_n);
+        end
+    end
+
+    assign vco_out   = (enable && rst_n) ? vco_clk : 1'b0;
     assign vco_ready = rst_n & enable;
 
     // Unused input - prevent lint warnings

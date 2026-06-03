@@ -1,35 +1,37 @@
 /*
  * SerDes PHY CDR VCO
- * Placeholder behavioral model for future analog CDR VCO circuit
- * All ports are connected but the VCO does not actively oscillate
+ * Behavioral simulation model - generates ~240 MHz clock when enabled
+ * In production this will be replaced with an analog oscillator.
  *
- * In production, this will be replaced with an analog VCO that:
- *   - Generates 240 MHz nominal clock
- *   - Has frequency controlled by cdr_control input
- *   - Range: ~227 MHz to ~253 MHz (+/- 2000 ppm tracking)
+ * Nominal: 240 MHz (half-period ≈ 2.083 ns with 1 ns/1 ps timescale)
+ * Range:   ~227–253 MHz tracked by CDR loop (not modelled here)
  */
 
 `default_nettype none
 
 module serdesphy_ana_cdr_vco (
-    // Clock and reset
-    input  wire       rst_n,           // Active-low reset
-    input  wire       enable,          // VCO enable
-
-    // Control input
-    input  wire [7:0] cdr_control,     // CDR control voltage (0-255)
-
-    // Output
-    output wire       vco_out,         // VCO output clock
-    output wire       vco_ready        // VCO stable flag
+    input  wire       rst_n,
+    input  wire       enable,
+    input  wire [7:0] cdr_control,
+    output wire       vco_out,
+    output wire       vco_ready
 );
 
-    // Placeholder: outputs directly driven
-    // In production, vco_out will be the oscillator output
-    // For now, tie to 0 (no oscillation)
-    assign vco_out = 1'b0;
+    // Behavioral oscillator: toggles at ~240 MHz when enabled
+    reg vco_clk;
 
-    // VCO ready when enabled and not in reset
+    initial vco_clk = 1'b0;
+
+    always begin
+        if (enable && rst_n)
+            #2.083 vco_clk = ~vco_clk;
+        else begin
+            vco_clk = 1'b0;
+            @(posedge enable or posedge rst_n);
+        end
+    end
+
+    assign vco_out   = (enable && rst_n) ? vco_clk : 1'b0;
     assign vco_ready = rst_n & enable;
 
     // Unused input - prevent lint warnings

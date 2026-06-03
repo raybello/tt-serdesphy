@@ -37,37 +37,40 @@ module serdesphy_reset_synchronizer (
     reg        cdr_rst_sync1, cdr_rst_sync2;
     
     // Master reset synchronization (to 24MHz domain)
+    // Active-low convention: 0 = in reset, 1 = normal operation
     always @(posedge clk_ref_24m or negedge rst_n_in) begin
         if (!rst_n_in) begin
-            rst_24m_sync1 <= 1'b1;   // Reset active
-            rst_24m_sync2 <= 1'b1;
+            rst_24m_sync1 <= 1'b0;   // Hold low while reset asserted
+            rst_24m_sync2 <= 1'b0;
         end else begin
-            rst_24m_sync1 <= 1'b0;   // Reset released
+            rst_24m_sync1 <= 1'b1;   // Release: propagate high through chain
             rst_24m_sync2 <= rst_24m_sync1;
         end
     end
-    
+
     // Generate master reset (consider PHY enable)
     assign master_reset_n = rst_24m_sync2 && phy_en;
-    
+
     // Synchronize reset to 240MHz TX clock domain
+    // Active-low convention: 0 = in reset, 1 = normal operation
     always @(posedge clk_240m_tx or negedge master_reset_n) begin
         if (!master_reset_n) begin
-            rst_240m_tx_sync1 <= 1'b1;  // Reset active
-            rst_240m_tx_sync2 <= 1'b1;
+            rst_240m_tx_sync1 <= 1'b0;  // Hold low while reset asserted
+            rst_240m_tx_sync2 <= 1'b0;
         end else begin
-            rst_240m_tx_sync1 <= 1'b0;   // Reset released
+            rst_240m_tx_sync1 <= 1'b1;  // Release: propagate high through chain
             rst_240m_tx_sync2 <= rst_240m_tx_sync1;
         end
     end
-    
+
     // Synchronize reset to 240MHz RX clock domain
+    // Active-low convention: 0 = in reset, 1 = normal operation
     always @(posedge clk_240m_rx or negedge master_reset_n) begin
         if (!master_reset_n) begin
-            rst_240m_rx_sync1 <= 1'b1;  // Reset active
-            rst_240m_rx_sync2 <= 1'b1;
+            rst_240m_rx_sync1 <= 1'b0;  // Hold low while reset asserted
+            rst_240m_rx_sync2 <= 1'b0;
         end else begin
-            rst_240m_rx_sync1 <= 1'b0;   // Reset released
+            rst_240m_rx_sync1 <= 1'b1;  // Release: propagate high through chain
             rst_240m_rx_sync2 <= rst_240m_rx_sync1;
         end
     end

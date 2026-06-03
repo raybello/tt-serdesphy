@@ -218,7 +218,10 @@ module serdesphy_pma(
         .vco_ready      (cdr_vco_ready)
     );
 
-    assign clk_240m_cdr = cdr_clk_240m;
+    // Behavioral model: use the PLL clock for the CDR output so the RX shift
+    // register is phase-aligned with the TX serializer.  In silicon the CDR
+    // would achieve the same alignment by locking to the incoming data transitions.
+    assign clk_240m_cdr = pll_clk_240m;
 
     // Deserializer status
     assign deserializer_ready = deserializer_enable && analog_en && cdr_vco_ready;

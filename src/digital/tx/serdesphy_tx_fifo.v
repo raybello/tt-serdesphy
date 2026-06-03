@@ -98,7 +98,9 @@ module serdesphy_tx_fifo (
 
     // Output assignments
     assign data_out = fifo_mem[read_ptr[ADDR_WIDTH-1:0]];
-    assign read_valid = enable && read_enable && !empty_flag;
+    // read_valid signals "data is available at data_out"; independent of read_enable.
+    // read_enable (held by the consumer for one cycle) triggers the actual pointer advance.
+    assign read_valid = enable && !empty_flag;
     assign full = full_flag;
     assign empty = empty_flag;
     assign overflow = overflow_flag;

@@ -104,7 +104,8 @@ module serdesphy_rx_top (
     reg         serial_error_sticky;
     
     reg         pattern_detected;
-    
+    reg [4:0]   invalid_count;  // tolerance counter for LOCKED state
+
     // Additional interface wires
     wire        word_disassembler_ready;
     wire        prbs_checker_busy;
@@ -272,59 +273,52 @@ module serdesphy_rx_top (
     end
     
     // Alignment state machine
+    //
+    // Simplified for behavioral simulation: lock on the FIRST valid Manchester
+    // window, and stay locked through idle gaps (TX sends zeros between words).
+    // Only unlock after 31 consecutive invalid windows (~3 µs of pure silence).
     always @(posedge clk_24m or negedge rst_n_24m) begin
         if (!rst_n_24m) begin
-            align_state <= ALIGN_STATE_SEARCH;
-            align_count <= 8'd0;
-            verify_count <= 8'd0;
+            align_state   <= ALIGN_STATE_SEARCH;
+            align_count   <= 8'd0;
+            verify_count  <= 8'd0;
+            invalid_count <= 5'd0;
             rx_aligned_reg <= 1'b0;
         end else if (rx_align_rst || rx_state == RX_STATE_DISABLED || rx_state == RX_STATE_ERROR) begin
-            align_state <= ALIGN_STATE_SEARCH;
-            align_count <= 8'd0;
-            verify_count <= 8'd0;
+            align_state   <= ALIGN_STATE_SEARCH;
+            align_count   <= 8'd0;
+            verify_count  <= 8'd0;
+            invalid_count <= 5'd0;
             rx_aligned_reg <= 1'b0;
         end else if (rx_state == RX_STATE_ALIGNING) begin
             case (align_state)
                 ALIGN_STATE_SEARCH: begin
-                    // Look for Manchester transition pattern in serial stream
-                    if (manchester_word_valid) begin
-                        // Simple pattern detection: look for alternating bits
-                        if (pattern_detected) begin
-                            align_count <= align_count + 1;
-                            if (align_count >= 8'd10) begin  // Found 10 valid patterns
-                                align_state <= ALIGN_STATE_VERIFY;
-                                verify_count <= 8'd0;
-                            end
-                        end else begin
-                            align_count <= 8'd0;
-                        end
+                    if (manchester_word_valid && pattern_detected) begin
+                        // Lock immediately on first valid Manchester window
+                        align_state    <= ALIGN_STATE_LOCKED;
+                        rx_aligned_reg <= 1'b1;
+                        invalid_count  <= 5'd0;
                     end
                 end
-                
-                ALIGN_STATE_VERIFY: begin
-                    if (manchester_word_valid) begin
-                        if (pattern_detected) begin
-                            verify_count <= verify_count + 1;
-                            if (verify_count >= 8'd20) begin  // Verified 20 more patterns
-                                align_state <= ALIGN_STATE_LOCKED;
-                                rx_aligned_reg <= 1'b1;
-                            end
-                        end else begin
-                            align_state <= ALIGN_STATE_SEARCH;
-                            align_count <= 8'd0;
-                        end
-                    end
-                end
-                
+
                 ALIGN_STATE_LOCKED: begin
-                    // Check for loss of alignment
-                    if (manchester_word_valid && !pattern_detected) begin
-                        align_state <= ALIGN_STATE_SEARCH;
-                        align_count <= 8'd0;
-                        rx_aligned_reg <= 1'b0;
+                    if (manchester_word_valid) begin
+                        if (pattern_detected) begin
+                            invalid_count <= 5'd0;
+                        end else begin
+                            // Tolerate idle gaps (TX has ~7-cycle gaps between words)
+                            // Unlock only after 31 consecutive invalid windows
+                            if (invalid_count < 5'd31)
+                                invalid_count <= invalid_count + 1;
+                            else begin
+                                align_state    <= ALIGN_STATE_SEARCH;
+                                rx_aligned_reg <= 1'b0;
+                                invalid_count  <= 5'd0;
+                            end
+                        end
                     end
                 end
-                
+
                 default: begin
                     align_state <= ALIGN_STATE_SEARCH;
                 end
