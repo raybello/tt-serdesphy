@@ -18,4 +18,7 @@ src/_tt_fpga_top.v
 .venv/
 */venv/
 .claude/
+uvm_tb/build/
+uvm_tb/sim/
+actions/
 
