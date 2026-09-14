@@ -140,7 +140,6 @@ module serdesphy_deserializer_if (
             deserializer_enable_reg <= 1'b0;
             deserializer_reset_n_reg <= 1'b1;  // No reset initially
             deserializer_active_reg <= 1'b0;
-            deserializer_status_reg <= 1'b0;
             if_error_reg <= 1'b0;
             error_count <= 3'd0;
             lock_counter <= 8'd0;

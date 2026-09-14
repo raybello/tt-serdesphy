@@ -171,6 +171,11 @@ jobs:
           name: regression-report
           path: site/regression
 
+      - name: Documentation page
+        run: |
+          mkdir -p site/documentation
+          cp serdesphy-slides.html site/documentation/index.html
+
       - name: Landing page
         run: |
           mkdir -p site
