@@ -155,15 +155,8 @@ module serdesphy_top(
 	assign clk_240m_tx_en = pll_lock_raw;  // TX clock enabled when PLL locked
 	assign clk_240m_rx_en = deserializer_lock;  // RX clock enabled when CDR locked
 
-	// RX serial interface signals from deserializer
-	assign rx_serial_valid = deserializer_active;  // Valid when deserializer active
-	assign rx_serial_error = deserializer_error;   // Error from deserializer
-
 	// =========================================================================
 
-	// PCS Internal Logic - Connect RX serial data from PMA
-	assign rx_serial_data = deserializer_data;
-	
 	// PCS Internal Logic - Generate PMA control signals
 	assign pll_enable = phy_en && !iso_en;
 	assign pll_reset_n = digital_reset_n && !pll_rst;
@@ -174,12 +167,36 @@ module serdesphy_top(
 	assign serializer_enable = tx_en && !iso_en;
 	assign serializer_reset_n = rst_n_240m_tx;
 	assign serializer_clock = clk_240m_tx;
-	
-	// Deserializer control signals
-	assign deserializer_enable = rx_en && !iso_en;
-	assign deserializer_reset_n = rst_n_240m_rx;
-	assign deserializer_clock = clk_240m_rx;
-	
+
+	// Deserializer Interface: real CDC boundary between the CDR-recovered
+	// clk_240m_rx domain and clk_24m (see
+	// docs/implementation/01-spec-vs-implementation.md Finding 2.2 - this
+	// used to be a direct, unsynchronized passthrough of the PMA's raw
+	// deserializer_data/active/error). Also implements TEST_MODE bypass
+	// for the RX path (deserializer_bypass), which previously reached the
+	// PMA as a dead input.
+	serdesphy_deserializer_if u_deserializer_if (
+		.clk_24m             (clk_ref_24m),
+		.clk_240m_rx         (clk_240m_rx),
+		.rst_n_24m           (rst_n_24m),
+		.rst_n_240m_rx       (rst_n_240m_rx),
+		.rx_en               (rx_en),
+		.deserializer_bypass (test_mode),
+		.deserializer_data   (deserializer_data),
+		.deserializer_enable (deserializer_enable),
+		.deserializer_clock  (deserializer_clock),
+		.deserializer_reset_n(deserializer_reset_n),
+		.deserializer_ready  (deserializer_ready),
+		.deserializer_lock   (deserializer_lock),
+		.deserializer_error  (deserializer_error),
+		.rx_serial_data      (rx_serial_data),
+		.rx_serial_valid     (rx_serial_valid),
+		.rx_serial_error     (rx_serial_error),
+		.deserializer_active (),
+		.deserializer_status (),
+		.if_error            ()
+	);
+
 	// Connect phy_ready status output
 	// Other outputs (tx_active, tx_error, rx_active, rx_error) are already connected in PCS module
 	
@@ -266,7 +283,12 @@ module serdesphy_top(
 		.power_good         (power_good),
 		.por_active         (por_active),
 		.por_complete       (por_complete),
-		
+
+		// Analog PLL raw status (for PLL lock qualification)
+		.pll_lock_raw       (pll_lock_raw),
+		.pll_vco_ok         (pll_vco_ok),
+		.pll_cp_ok          (pll_cp_ok),
+
 		// PLL Status
 		.pll_lock           (pll_lock),
 		.pll_ready          (pll_ready),

@@ -34,18 +34,35 @@ module serdesphy_prbs_generator (
     localparam STATE_READY   = 2'b10;
     localparam STATE_OUTPUT  = 2'b11;
     
-    // Unrolled PRBS-7 computation from current prbs_shift_reg.
-    // Each output bit is the MSB of the LFSR after i steps; the new LFSR
-    // state is the lower 7 bits of the 8-bit output (bits [6:0]).
-    wire [7:0] prbs_next_byte = {prbs_shift_reg[6] ^ prbs_shift_reg[5],
-                                  prbs_shift_reg[0], prbs_shift_reg[1],
-                                  prbs_shift_reg[2], prbs_shift_reg[3],
-                                  prbs_shift_reg[4], prbs_shift_reg[5],
-                                  prbs_shift_reg[6]};
-    wire [6:0] prbs_next_state = {prbs_shift_reg[0], prbs_shift_reg[1],
-                                   prbs_shift_reg[2], prbs_shift_reg[3],
-                                   prbs_shift_reg[4], prbs_shift_reg[5],
-                                   prbs_shift_reg[6]};
+    // PRBS-7 byte-wide advance: applies the x^7+x^6+1 Fibonacci LFSR
+    // recurrence (fb = s[6]^s[5]; s <= {s[5:0], fb}) 8 times per call, MSB
+    // of the output byte first. The previous version only computed a
+    // correct feedback bit for bit 7 and then just copied the other 7
+    // register bits through unshifted for bits 6..0 - starting from the
+    // reset state 7'h7F (all ones), reordering all-1 bits yields all-1
+    // bits again, so that formula was a genuine fixed point: the LFSR
+    // could never leave 7F, making "PRBS" mode transmit a constant,
+    // perfectly periodic byte forever instead of a pseudorandom sequence.
+    function automatic [14:0] prbs7_advance_byte;
+        input [6:0] state;
+        integer i;
+        reg [6:0] s;
+        reg [7:0] b;
+        reg        fb;
+        begin
+            s = state;
+            for (i = 0; i < 8; i = i + 1) begin
+                fb = s[6] ^ s[5];
+                b[7-i] = fb;
+                s = {s[5:0], fb};
+            end
+            prbs7_advance_byte = {s, b};
+        end
+    endfunction
+
+    wire [14:0] prbs7_result     = prbs7_advance_byte(prbs_shift_reg);
+    wire [7:0]  prbs_next_byte   = prbs7_result[7:0];
+    wire [6:0]  prbs_next_state  = prbs7_result[14:8];
 
     // PRBS generator state machine
     always @(posedge clk or negedge rst_n) begin
@@ -83,11 +100,27 @@ module serdesphy_prbs_generator (
                 end
                 
                 STATE_OUTPUT: begin
+                    // Hold here (output_valid_reg stays 1, data stays
+                    // stable) until the consumer is actually ready -
+                    // never fall through to STATE_IDLE while a byte is
+                    // still waiting to be captured. STATE_IDLE
+                    // unconditionally clears output_valid_reg the very
+                    // next cycle regardless of prbs_ready, which used to
+                    // make this exact "not ready THIS cycle" branch
+                    // silently discard the current byte forever the
+                    // instant serdesphy_tx_data_mux.v's own multi-cycle
+                    // capture sequence hadn't caught up yet - roughly
+                    // every other byte was lost this way whenever the
+                    // mux's round trip took longer than one cycle to get
+                    // back to waiting (which it always does - see
+                    // serdesphy_tx_data_mux.v's STATE_SELECT/OUTPUT/
+                    // STATE_READY sequence), confirmed by a cycle-by-cycle
+                    // trace showing a byte visibly presented with valid=1
+                    // and then cleared to 0 one cycle later with
+                    // mux_valid never having pulsed for it at all.
                     if (prbs_ready) begin
                         output_valid_reg <= 0;
                         generator_state <= STATE_GENERATE;
-                    end else begin
-                        generator_state <= STATE_IDLE;
                     end
                 end
                 

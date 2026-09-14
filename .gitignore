@@ -20,5 +20,7 @@ src/_tt_fpga_top.v
 .claude/
 uvm_tb/build/
 uvm_tb/sim/
+uvm_tb/regression/report.html
+uvm_tb/regression/results/
 actions/
 

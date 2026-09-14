@@ -23,14 +23,13 @@ module system (
   wire  [7:0] uio_out;
   wire  [7:0] uio_oe;
 
-  // Static tie-offs: no TX/loopback stimulus agent yet, keep the DUT
-  // in a simple loopback-enabled, non-test-mode configuration.
-  assign vif.test_mode = 1'b0;
-  assign vif.lpbk_en   = 1'b1;
-  assign vif.tx_data   = '0;
-  assign vif.tx_valid  = 1'b0;
-  assign vif.rxp       = 1'b0;
-  assign vif.rxn       = 1'b0;
+  // test_mode/lpbk_en/tx_data/tx_valid are driven by phy_io_agent
+  // (uvm_tb/agents/phy_io_agent); rxp/rxn are unused in loopback mode
+  // (lpbk_en routes the TX driver's own output back into the RX front
+  // end inside serdesphy_pma.v) and tied off here since no standalone
+  // serial RX stimulus driver exists.
+  assign vif.rxp = 1'b0;
+  assign vif.rxn = 1'b0;
 
   // ------------------------------------------------------------------
   // Pack/unpack the Tiny Tapeout ui_in / uio_in / uo_out buses

@@ -39,7 +39,11 @@ module serdesphy_tx_top (
     output wire       tx_error,         // TX error flag
     
     // Clock domain status
-    input  wire       clk_240m_tx_en    // 240MHz TX clock enable
+    input  wire       clk_240m_tx_en,   // 240MHz TX clock enable
+
+    // Clears tx_overflow/tx_underflow (STATUS.FIFO_ERR is sticky and
+    // clears on an I2C read of STATUS - docs/info.md 5.7)
+    input  wire       status_read_clear
 );
 
     // TX Controller State Machine
@@ -264,12 +268,17 @@ module serdesphy_tx_top (
         end
     end
     
-    // Sticky error handling
+    // Sticky error handling. status_read_clear takes priority over a
+    // same-cycle set so a read always observes-then-clears rather than
+    // racing a fresh overflow/underflow into "still stuck".
     always @(posedge clk_24m or negedge rst_n_24m) begin
         if (!rst_n_24m) begin
             overflow_sticky <= 1'b0;
             underflow_sticky <= 1'b0;
             manchester_error_sticky <= 1'b0;
+        end else if (status_read_clear) begin
+            overflow_sticky <= 1'b0;
+            underflow_sticky <= 1'b0;
         end else begin
             if (tx_fifo_overflow_wire) overflow_sticky <= 1'b1;
             if (tx_fifo_underflow_wire) underflow_sticky <= 1'b1;

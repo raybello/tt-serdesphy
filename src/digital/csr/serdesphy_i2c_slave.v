@@ -48,7 +48,11 @@ module serdesphy_i2c_slave (
 
     // Write notification
     output wire        reg_write_strobe,
-    output wire [7:0]  reg_write_addr
+    output wire [7:0]  reg_write_addr,
+
+    // Read notification (for STATUS clear-on-read, docs/info.md 5.7)
+    output wire        reg_read_strobe,
+    output wire [7:0]  reg_read_addr
 );
 
     // Internal signals
@@ -202,7 +206,9 @@ module serdesphy_i2c_slave (
         .sdaIn             (sdaDeb),
         .sdaOut            (sdaOut),
         .startStopDetState (startStopDetState),
-        .clearStartStopDet (clearStartStopDet)
+        .clearStartStopDet (clearStartStopDet),
+        .readEn            (reg_read_strobe),
+        .readAddr          (reg_read_addr)
     );
 
 endmodule

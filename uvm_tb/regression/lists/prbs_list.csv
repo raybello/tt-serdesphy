@@ -1,0 +1,3 @@
+<NUM_SIMS>,<TEST_NAME>,<RUN_OPTIONS>,<SIMULATION_NAME>
+2, prbs_generator_test, -s 1, prbs_generator_test
+2, prbs_checker_test, -s 1, prbs_checker_test

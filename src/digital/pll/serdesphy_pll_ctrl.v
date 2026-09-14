@@ -1,7 +1,32 @@
 /*
- * SerDes PHY PLL Controller
- * Extends clock_manager with dedicated PLL configuration and monitoring
- * Manages VCO trim, charge pump control, and enhanced lock detection
+ * SerDes PHY PLL Lock Qualifier
+ *
+ * Computes PLL_LOCK/PLL_READY from the analog PLL's raw status
+ * (pll_lock_raw/pll_vco_ok/pll_cp_ok), independent of any other PHY block's
+ * enable state (in particular: independent of TX_EN/serializer_enable -
+ * see docs/implementation/01-spec-vs-implementation.md Finding 2.1, which
+ * this module fixes. STATUS[0] previously aliased the TX serializer's
+ * "ready" signal, so polling PLL_LOCK before enabling TX - exactly what
+ * docs/info.md section 8.1's own init sequence does - could never see it
+ * assert).
+ *
+ * Adds hysteresis on top of the raw lock signal: LOCK_COUNT_MAX cycles of
+ * continuous raw lock before claiming PLL_LOCK, UNLOCK_COUNT cycles of
+ * continuous raw unlock before dropping it, so brief glitches on the
+ * analog side don't bounce the status bit.
+ *
+ * No independent PLL_ERROR is derived here: in the current PMA
+ * (src/analog/serdesphy_pma.v), pll_vco_ok is simply
+ * `assign pll_vco_ok = pll_lock_raw;` - i.e. not an independent
+ * "VCO in operating range" signal, just an alias of pll_lock_raw itself.
+ * An earlier version of this module treated `phy_en && !pll_vco_ok` as an
+ * error condition, which is true for the entire ~10us acquisition window
+ * every time the PLL starts up (pll_lock_raw, and therefore pll_vco_ok,
+ * is 0 for that whole window by design) - it latched a permanent false
+ * "error" before the PLL ever got a chance to lock. Once the PMA exposes
+ * a real, independent VCO/charge-pump health signal (see
+ * docs/implementation/pll/README.md's circuit-level plan), this module
+ * should grow a real fault path back.
  */
 
 `default_nettype none
@@ -10,234 +35,107 @@ module serdesphy_pll_ctrl (
     // Clock and reset
     input  wire       clk_ref_24m,     // 24 MHz reference clock
     input  wire       rst_n,           // Active-low reset
-    
-    // Control inputs from CSR
+
+    // Control input from CSR
     input  wire       phy_en,          // PHY global enable
-    input  wire [3:0] vco_trim,        // VCO frequency coarse trim
-    input  wire [1:0] cp_current,      // Charge pump current select
-    input  wire       pll_rst,         // PLL reset
-    input  wire       pll_bypass,       // PLL bypass mode
-    
-    // Clock enables and status to analog PLL
-    output wire       pll_enable,      // PLL enable
-    output wire       pll_reset_n,     // PLL reset (active-low)
-    output wire       pll_bypass_en,   // PLL bypass enable
-    output wire [3:0] pll_vco_trim,    // VCO trim control
-    output wire [1:0] pll_cp_current,  // Charge pump current control
-    output wire       pll_iso_n,       // PLL isolation control
-    
-    // Status from analog PLL
+
+    // Status from analog PLL (PMA)
     input  wire       pll_lock_raw,    // Raw PLL lock from analog
     input  wire       pll_vco_ok,      // VCO operating range indicator
     input  wire       pll_cp_ok,       // Charge pump OK indicator
-    
-    // Enhanced status outputs
+
+    // Qualified status outputs
     output wire       pll_lock,        // Validated PLL lock
     output wire       pll_ready,       // PLL ready for operation
-    output wire [7:0] pll_status,      // Detailed PLL status
-    output wire       pll_error,       // PLL error flag
-    
-    // Clock management outputs
-    output wire       clk_24m_en,      // 24 MHz clock enable
-    output wire       clk_240m_tx_en,  // 240 MHz TX clock enable
-    output wire       clk_240m_rx_en,  // 240 MHz RX clock enable
-    output wire       cdr_lock,        // CDR lock indicator
-    output wire       phy_ready        // PHY ready for operation
+    output wire [7:0] pll_status,      // Diagnostic status word
+    output wire       pll_error        // PLL error flag (always 0 - see header)
 );
 
-    // Enhanced lock detection parameters
-    localparam LOCK_COUNT_MAX = 16'd2400;  // 100us at 24MHz for robust detection
-    localparam LOCK_COUNT_MIN = 16'd240;   // 10us minimum for lock claim
+    // docs/info.md 4.1 PLL lock time is 8-10us typ/max, and
+    // serdesphy_ana_pll.v's own STATE_ACQUIRE already spends the full
+    // 240 cycles (10us @ 24MHz) getting pll_lock_raw to assert in the
+    // first place - pll_lock_raw is a clean, debounced FSM output, not
+    // a noisy comparator, so this stage only needs a handful of cycles
+    // of extra debounce on top of that, not another full acquisition
+    // wait.
+    localparam LOCK_COUNT_MAX = 16'd4;     // ~167ns extra debounce @ 24MHz
     localparam UNLOCK_COUNT   = 16'd240;   // 10us before unlock declaration
-    
-    // PLL status register bits
-    localparam STATUS_PLL_EN       = 7;
-    localparam STATUS_PLL_BYPASS   = 6;
-    localparam STATUS_VCO_TRIM     = 5'h2;
-    localparam STATUS_CP_CURRENT   = 1'h0;
-    
-    // Internal signals
-    reg        pll_enable_reg;
-    reg        pll_reset_n_reg;
-    reg        pll_bypass_en_reg;
-    reg [3:0]  pll_vco_trim_reg;
-    reg [1:0]  pll_cp_current_reg;
-    reg        pll_iso_n_reg;
-    reg        pll_lock_reg;
-    reg        pll_ready_reg;
-    reg        pll_error_reg;
-    reg [15:0] lock_counter;
-    reg [15:0] unlock_counter;
-    reg [7:0]  pll_status_reg;
-    
-    // Lock detection state machine
+
     localparam [1:0]
         LOCK_STATE_UNLOCKED  = 2'b00,
         LOCK_STATE_ACQUIRING = 2'b01,
-        LOCK_STATE_LOCKED    = 2'b10,
-        LOCK_STATE_ERROR     = 2'b11;
-    
-    reg [1:0] lock_state;
-    
-    // Instantiate existing clock manager
-    wire base_clk_24m_en;
-    wire base_clk_240m_tx_en;
-    wire base_clk_240m_rx_en;
-    wire base_pll_lock;
-    wire base_cdr_lock;
-    wire base_phy_ready;
-    
-    serdesphy_clock_manager u_clock_manager (
-        .clk_ref_24m     (clk_ref_24m),
-        .rst_n           (rst_n),
-        .phy_en          (phy_en),
-        .pll_rst         (pll_rst),
-        .cdr_rst         (1'b0),        // CDR reset handled elsewhere
-        .clk_24m_en      (base_clk_24m_en),
-        .clk_240m_tx_en  (base_clk_240m_tx_en),
-        .clk_240m_rx_en  (base_clk_240m_rx_en),
-        .pll_lock        (base_pll_lock),
-        .cdr_lock        (base_cdr_lock),
-        .phy_ready       (base_phy_ready)
-    );
-    
-    // Enhanced PLL control logic
+        LOCK_STATE_LOCKED    = 2'b10;
+
+    reg [1:0]  lock_state;
+    reg [15:0] lock_counter;
+    reg [15:0] unlock_counter;
+    reg        pll_lock_reg;
+    reg        pll_ready_reg;
+
+    wire pll_healthy = phy_en && pll_lock_raw && pll_vco_ok && pll_cp_ok;
+
     always @(posedge clk_ref_24m or negedge rst_n) begin
         if (!rst_n) begin
-            pll_enable_reg <= 1'b0;
-            pll_reset_n_reg <= 1'b0;
-            pll_bypass_en_reg <= 1'b0;
-            pll_vco_trim_reg <= 4'h8;    // Default nominal frequency
-            pll_cp_current_reg <= 2'h2;  // Default 40µA
-            pll_iso_n_reg <= 1'b1;       // Start with isolation disabled
-        end else begin
-            // PLL enable control
-            pll_enable_reg <= phy_en && !pll_rst;
-            
-            // PLL reset control (active-low reset to analog)
-            pll_reset_n_reg <= !pll_rst && phy_en;
-            
-            // PLL bypass control
-            pll_bypass_en_reg <= pll_bypass && phy_en;
-            
-            // VCO trim control
-            if (pll_enable_reg && !pll_bypass_en_reg) begin
-                pll_vco_trim_reg <= vco_trim;
-            end
-            
-            // Charge pump current control
-            pll_cp_current_reg <= cp_current;
-            
-            // PLL isolation control (enable isolation during reset/bypass)
-            pll_iso_n_reg <= !(pll_rst || !phy_en || pll_bypass_en_reg);
-        end
-    end
-    
-    // Enhanced lock detection with validation
-    always @(posedge clk_ref_24m or negedge rst_n) begin
-        if (!rst_n) begin
-            lock_state <= LOCK_STATE_UNLOCKED;
-            lock_counter <= 16'd0;
+            lock_state     <= LOCK_STATE_UNLOCKED;
+            lock_counter   <= 16'd0;
             unlock_counter <= 16'd0;
-            pll_lock_reg <= 1'b0;
-            pll_ready_reg <= 1'b0;
-            pll_error_reg <= 1'b0;
+            pll_lock_reg   <= 1'b0;
+            pll_ready_reg  <= 1'b0;
         end else begin
             case (lock_state)
                 LOCK_STATE_UNLOCKED: begin
-                    if (pll_enable_reg && !pll_bypass_en_reg && 
-                        pll_lock_raw && pll_vco_ok && pll_cp_ok) begin
-                        lock_state <= LOCK_STATE_ACQUIRING;
-                        lock_counter <= 16'd0;
+                    if (pll_healthy) begin
+                        lock_state     <= LOCK_STATE_ACQUIRING;
+                        lock_counter   <= 16'd0;
                         unlock_counter <= 16'd0;
-                    end else if (pll_enable_reg && !pll_bypass_en_reg && 
-                               (!pll_vco_ok || !pll_cp_ok)) begin
-                        lock_state <= LOCK_STATE_ERROR;
-                        pll_error_reg <= 1'b1;
                     end
                 end
-                
+
                 LOCK_STATE_ACQUIRING: begin
-                    if (pll_lock_raw && pll_vco_ok && pll_cp_ok) begin
+                    if (pll_healthy) begin
                         if (lock_counter < LOCK_COUNT_MAX) begin
                             lock_counter <= lock_counter + 1;
                         end else begin
-                            lock_state <= LOCK_STATE_LOCKED;
-                            pll_lock_reg <= 1'b1;
+                            lock_state    <= LOCK_STATE_LOCKED;
+                            pll_lock_reg  <= 1'b1;
                             pll_ready_reg <= 1'b1;
                         end
                     end else begin
-                        lock_state <= LOCK_STATE_UNLOCKED;
-                        lock_counter <= 16'd0;
+                        lock_state     <= LOCK_STATE_UNLOCKED;
+                        lock_counter   <= 16'd0;
                         unlock_counter <= 16'd0;
                     end
                 end
-                
+
                 LOCK_STATE_LOCKED: begin
-                    if (!pll_enable_reg || pll_bypass_en_reg) begin
-                        lock_state <= LOCK_STATE_UNLOCKED;
-                        pll_lock_reg <= 1'b0;
+                    if (!phy_en) begin
+                        lock_state    <= LOCK_STATE_UNLOCKED;
+                        pll_lock_reg  <= 1'b0;
                         pll_ready_reg <= 1'b0;
-                    end else if (!pll_lock_raw || !pll_vco_ok || !pll_cp_ok) begin
+                    end else if (!pll_healthy) begin
                         if (unlock_counter < UNLOCK_COUNT) begin
                             unlock_counter <= unlock_counter + 1;
                         end else begin
-                            lock_state <= LOCK_STATE_UNLOCKED;
-                            pll_lock_reg <= 1'b0;
-                            pll_ready_reg <= 1'b0;
+                            lock_state     <= LOCK_STATE_UNLOCKED;
+                            pll_lock_reg   <= 1'b0;
+                            pll_ready_reg  <= 1'b0;
                             unlock_counter <= 16'd0;
                         end
                     end else begin
-                        unlock_counter <= 16'd0;  // Reset unlock counter
+                        unlock_counter <= 16'd0;
                     end
                 end
-                
-                LOCK_STATE_ERROR: begin
-                    if (!pll_enable_reg) begin
-                        lock_state <= LOCK_STATE_UNLOCKED;
-                        pll_error_reg <= 1'b0;
-                    end
-                end
-                
+
                 default: begin
-                    lock_state <= LOCK_STATE_ERROR;
-                    pll_error_reg <= 1'b1;
+                    lock_state <= LOCK_STATE_UNLOCKED;
                 end
             endcase
         end
     end
-    
-    // PLL status register construction
-    always @(posedge clk_ref_24m or negedge rst_n) begin
-        if (!rst_n) begin
-            pll_status_reg <= 8'h00;
-        end else begin
-            pll_status_reg <= {
-                pll_enable_reg,           // Bit 7: PLL enabled
-                pll_bypass_en_reg,         // Bit 6: PLL bypass
-                pll_vco_trim_reg,          // Bits 5:2: VCO trim
-                pll_cp_current_reg        // Bits 1:0: Charge pump current
-            };
-        end
-    end
-    
-    // Output assignments
-    assign pll_enable = pll_enable_reg;
-    assign pll_reset_n = pll_reset_n_reg;
-    assign pll_bypass_en = pll_bypass_en_reg;
-    assign pll_vco_trim = pll_vco_trim_reg;
-    assign pll_cp_current = pll_cp_current_reg;
-    assign pll_iso_n = pll_iso_n_reg;
-    assign pll_lock = pll_lock_reg;
-    assign pll_ready = pll_ready_reg;
-    assign pll_error = pll_error_reg;
-    assign pll_status = pll_status_reg;
-    
-    // Use enhanced outputs or fall back to base clock manager
-    assign clk_24m_en = pll_enable_reg ? base_clk_24m_en : 1'b0;
-    assign clk_240m_tx_en = pll_ready_reg ? base_clk_240m_tx_en : 1'b0;
-    assign clk_240m_rx_en = pll_ready_reg ? base_clk_240m_rx_en : 1'b0;
-    assign cdr_lock = base_cdr_lock;
-    assign phy_ready = pll_ready_reg && base_phy_ready;
+
+    assign pll_lock   = pll_lock_reg;
+    assign pll_ready  = pll_ready_reg;
+    assign pll_error  = 1'b0;
+    assign pll_status = {4'b0000, pll_cp_ok, pll_vco_ok, pll_lock_raw, phy_en};
 
 endmodule

@@ -77,14 +77,24 @@ module serdesphy_registerInterface (
     end
 
     // I2C Write - register bank update
+    //
+    // Reset values and reserved-bit masking below match docs/info.md
+    // section 5: PLL_CONFIG resets to 0x68 (VCO_TRIM=0x8, CP_CURRENT=0x2,
+    // PLL_RST=1) and CDR_CONFIG resets to 0x14 (CDR_GAIN=0x4, CDR_RST=1),
+    // so the PLL/CDR power up held in reset at the documented nominal
+    // trim, matching the docs/info.md section 8.1 init sequence (which
+    // expects to have to explicitly release PLL_RST/CDR_RST). Every
+    // register also masks its documented reserved bits to 0 on write, not
+    // just PHY_ENABLE, so a reserved-bit readback is always 0 regardless
+    // of what was written there.
     always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             reg_phy_enable   <= 8'h02;
             reg_tx_config    <= 8'h00;
             reg_rx_config    <= 8'h00;
             reg_data_select  <= 8'h00;
-            reg_pll_config   <= 8'h00;
-            reg_cdr_config   <= 8'h00;
+            reg_pll_config   <= 8'h68;
+            reg_cdr_config   <= 8'h14;
             reg_debug_enable <= 8'h00;
             reg_write_strobe <= 1'b0;
             reg_write_addr   <= 8'h00;
@@ -96,14 +106,14 @@ module serdesphy_registerInterface (
                 reg_write_addr   <= addr;
 
                 case (addr[2:0])
-                    3'h0: reg_phy_enable   <= {{6{1'b0}}, dataIn[1:0]};
-                    3'h1: reg_tx_config    <= dataIn;
-                    3'h2: reg_rx_config    <= dataIn;
-                    3'h3: reg_data_select  <= dataIn;
-                    3'h4: reg_pll_config   <= dataIn;
-                    3'h5: reg_cdr_config   <= dataIn;
+                    3'h0: reg_phy_enable   <= {6'h00, dataIn[1:0]};
+                    3'h1: reg_tx_config    <= {4'h0, dataIn[3:0]};
+                    3'h2: reg_rx_config    <= {4'h0, dataIn[3:0]};
+                    3'h3: reg_data_select  <= {6'h00, dataIn[1:0]};
+                    3'h4: reg_pll_config   <= dataIn;  // all 8 bits defined
+                    3'h5: reg_cdr_config   <= {3'h0, dataIn[4:0]};
                     // 3'h6: Status register is read-only, writes ignored
-                    3'h7: reg_debug_enable <= dataIn;
+                    3'h7: reg_debug_enable <= {5'h00, dataIn[2:0]};
                     default: ;  // Ignore writes to undefined addresses
                 endcase
             end

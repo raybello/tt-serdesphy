@@ -1,0 +1,53 @@
+# bootenv - source this from bash to set up the environment variables
+# used by the uvm_tb build/run/regress scripts and filelists:
+#
+#   REPO_PATH          absolute path to this repo's root
+#   SERDESPHY_VERILATOR path to the verilator binary to build with
+#
+# Usage:
+#   source bootenv
+#   . ./bootenv
+#
+# Any variable already set in the environment is left untouched - this
+# only fills in a default for whichever of the two is missing, so local
+# dev setups (custom verilator checkout, repo symlinked elsewhere, etc)
+# can export their own values before sourcing this and keep them.
+#
+# NOTE: we deliberately do NOT use the name VERILATOR_BIN here (or
+# VERILATOR_ROOT/VERILATOR_GDB/VERILATOR_VALGRIND) - those are reserved
+# by verilator's own bin/verilator wrapper script, which reads
+# VERILATOR_BIN itself to decide which binary to re-exec. Pointing that
+# at the wrapper's own resolved path makes it try to exec itself and
+# fail with "re-entered N levels deep via $VERILATOR_RUNNING". Our
+# override lives in SERDESPHY_VERILATOR instead, which build.py reads.
+
+if [ -n "$BASH_SOURCE" ]; then
+    _bootenv_this="${BASH_SOURCE[0]}"
+else
+    _bootenv_this="$0"
+fi
+_bootenv_dir="$(cd "$(dirname "$_bootenv_this")" && pwd)"
+
+if [ -z "$REPO_PATH" ]; then
+    export REPO_PATH="$_bootenv_dir"
+fi
+
+if [ -z "$SERDESPHY_VERILATOR" ]; then
+    if command -v verilator >/dev/null 2>&1; then
+        export SERDESPHY_VERILATOR="$(command -v verilator)"
+    elif [ -x "/opt/verilator/bin/verilator" ]; then
+        # matches the install prefix used by .github/workflows/regress.yaml
+        export SERDESPHY_VERILATOR="/opt/verilator/bin/verilator"
+        export PATH="/opt/verilator/bin:$PATH"
+    fi
+fi
+
+unset _bootenv_this _bootenv_dir
+
+echo "bootenv: REPO_PATH=$REPO_PATH"
+if [ -n "$SERDESPHY_VERILATOR" ]; then
+    echo "bootenv: SERDESPHY_VERILATOR=$SERDESPHY_VERILATOR"
+else
+    echo "bootenv: SERDESPHY_VERILATOR not found (verilator not on PATH) - set it manually, e.g.:"
+    echo "  export SERDESPHY_VERILATOR=/path/to/verilator/bin/verilator"
+fi

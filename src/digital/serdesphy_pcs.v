@@ -115,6 +115,13 @@ descrambling etc.
     output       rx_error,           // RX error flag
     output       rx_aligned,         // RX alignment achieved
     
+    // Analog PLL raw status (from PMA), for serdesphy_pll_ctrl's lock
+    // qualification - independent of TX/RX enable state (see
+    // docs/implementation/01-spec-vs-implementation.md Finding 2.1)
+    input       pll_lock_raw,       // Raw PLL lock from analog
+    input       pll_vco_ok,         // VCO operating range indicator
+    input       pll_cp_ok,          // Charge pump OK indicator
+
     // Serializer Interface Status (from PMA)
     input       serializer_ready,   // Serializer ready flag
     input       serializer_error,   // Serializer error flag
@@ -143,7 +150,12 @@ descrambling etc.
     wire digital_reset_n;
 	wire phy_en_r;
 
+	// Clear-on-read pulse for the sticky STATUS bits (docs/info.md 5.7)
+	wire status_read_pulse;
+
+
 	assign phy_en = phy_en_r;
+
 
 	// Internal wires for TX module outputs
 	wire       tx_serial_data_int;
@@ -177,7 +189,11 @@ descrambling etc.
 	assign tx_overflow = tx_overflow_int;
 	assign tx_underflow = tx_underflow_int;
 	assign tx_active = tx_active_int;
-	assign tx_error = tx_error_int;
+	// serializer_error folds in here since PLL_LOCK/PLL_READY/PLL_ERROR
+	// no longer derive from it (see serdesphy_pll_ctrl below) - this
+	// keeps the analog TX interface's own error flag from becoming a
+	// dead input.
+	assign tx_error = tx_error_int || serializer_error;
 
 	assign rx_data = rx_data_int;
 	assign rx_valid = rx_valid_int;
@@ -186,17 +202,33 @@ descrambling etc.
 	assign rx_overflow = rx_overflow_int;
 	assign rx_underflow = rx_underflow_int;
 	assign rx_active = rx_active_int;
-	assign rx_error = rx_error_int;
+	// deserializer_error folds in here for the same reason as
+	// serializer_error above.
+	assign rx_error = rx_error_int || deserializer_error;
 	assign rx_aligned = rx_aligned_int;
 	assign prbs_err = prbs_err_int;
 
-	// PLL/CDR lock status from serializer/deserializer status
-	assign pll_lock = serializer_ready;
+	// CDR lock status: directly from the analog CDR (already correctly
+	// independent of TX_EN; gated on RX_EN via deserializer_enable, which
+	// matches docs/info.md section 8.1's init sequence ordering - RX is
+	// enabled before CDR_LOCK is polled).
 	assign cdr_lock = deserializer_lock;
-	assign pll_ready = serializer_ready;
-	assign phy_ready = power_good && digital_reset_n && serializer_ready;
-	assign pll_status = {4'b0000, serializer_status, serializer_active, serializer_error, serializer_ready};
-	assign pll_error = serializer_error;
+	assign phy_ready = power_good && digital_reset_n && pll_lock;
+
+	// PLL Lock Qualifier - see Finding 2.1: PLL_LOCK/PLL_READY/PLL_ERROR
+	// must depend only on the PLL itself, never on TX_EN/serializer state.
+	serdesphy_pll_ctrl u_pll_ctrl (
+		.clk_ref_24m  (clk_ref_24m),
+		.rst_n        (digital_reset_n),
+		.phy_en       (phy_en_r),
+		.pll_lock_raw (pll_lock_raw),
+		.pll_vco_ok   (pll_vco_ok),
+		.pll_cp_ok    (pll_cp_ok),
+		.pll_lock     (pll_lock),
+		.pll_ready    (pll_ready),
+		.pll_status   (pll_status),
+		.pll_error    (pll_error)
+	);
 
 
     // Power-on-Reset Controller
@@ -305,7 +337,8 @@ descrambling etc.
 		.rx_underflow    (rx_underflow),
 		.pll_lock        (pll_lock),
 		.cdr_lock        (cdr_lock),
-		.prbs_err        (prbs_err)
+		.prbs_err        (prbs_err),
+		.status_read_pulse(status_read_pulse)
 	);
 	
 	
@@ -331,7 +364,8 @@ descrambling etc.
 		.tx_underflow     (tx_underflow_int),
 		.tx_active        (tx_active_int),
 		.tx_error         (tx_error_int),
-		.clk_240m_tx_en   (clk_240m_tx_en)
+		.clk_240m_tx_en   (clk_240m_tx_en),
+		.status_read_clear(status_read_pulse)
 	);
 	
 	// // Serializer Interface
@@ -380,7 +414,8 @@ descrambling etc.
 		.rx_error         (rx_error_int),
 		.rx_aligned       (rx_aligned_int),
 		.prbs_err         (prbs_err_int),
-		.clk_240m_rx_en   (clk_240m_rx_en)
+		.clk_240m_rx_en   (clk_240m_rx_en),
+		.status_read_clear(status_read_pulse)
 	);
 	
 	// // Deserializer Interface

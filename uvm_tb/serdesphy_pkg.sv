@@ -47,6 +47,17 @@ package serdesphy_pkg;
   `include "agents/i2c_agent/i2c_agent.sv"
 
   // ------------------------------------------------------------------
+  // phy_io_agent
+  // ------------------------------------------------------------------
+  `include "agents/phy_io_agent/phy_io_tr.sv"
+  `include "agents/phy_io_agent/phy_io_sequencer.sv"
+  `include "agents/phy_io_agent/phy_io_driver.sv"
+  `include "agents/phy_io_agent/phy_io_monitor.sv"
+  `include "agents/phy_io_agent/seq_lib/phy_send_byte_seq.sv"
+  `include "agents/phy_io_agent/seq_lib/phy_set_config_seq.sv"
+  `include "agents/phy_io_agent/phy_io_agent.sv"
+
+  // ------------------------------------------------------------------
   // RAL <-> i2c_agent glue (ral_pkg itself is bus-agnostic)
   // ------------------------------------------------------------------
   `include "ral/csr2i2c_adapter.sv"
@@ -78,5 +89,14 @@ package serdesphy_pkg;
   `include "tests/reset_test.sv"
   `include "tests/clk_test.sv"
   `include "tests/csr_rdwr_test.sv"
+  `include "tests/tx_rx_loopback_test.sv"
+  `include "tests/init_sequence_test.sv"
+  `include "tests/tx_fifo_test.sv"
+  `include "tests/pll_lock_test.sv"
+  `include "tests/test_mode_test.sv"
+  `include "tests/corner_case_test.sv"
+  `include "tests/fifo_loopback_test.sv"
+  `include "tests/prbs_generator_test.sv"
+  `include "tests/prbs_checker_test.sv"
 
 endpackage : serdesphy_pkg

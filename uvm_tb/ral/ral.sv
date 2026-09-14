@@ -4,13 +4,15 @@
 // assembles these into the address map and adds the convenience
 // read/write helpers.
 //
-// NOTE: docs/info.md lists non-zero power-on defaults for PLL_CONFIG
-// (0x68: VCO_TRIM=0x8, CP_CURRENT=0x2, PLL_RST=1) and CDR_CONFIG
-// (0x14: CDR_GAIN=0x4, CDR_RST=1), but serdesphy_registerInterface.v
-// actually resets both registers to 8'h00. The reset values below
-// match the RTL (what the DUT really does on reset) so that RAL
-// reset-value checks agree with simulation; this datasheet/RTL
-// mismatch is worth flagging separately.
+// Reset values match docs/info.md section 5 exactly: PLL_CONFIG resets
+// to 0x68 (VCO_TRIM=0x8, CP_CURRENT=0x2, PLL_RST=1) and CDR_CONFIG
+// resets to 0x14 (CDR_GAIN=0x4, CDR_RST=1) - serdesphy_registerInterface.v
+// was fixed to match (see docs/implementation/01-spec-vs-implementation.md
+// Finding 2.3; it previously reset both to 8'h00). Every register's
+// documented reserved bits are modeled "RO" with a fixed 0 reset value,
+// matching the RTL's write-side masking (Finding 2.4) - a write to a
+// reserved bit is silently dropped in hardware, so RAL should not treat
+// it as writable either.
 
 class phy_enable_reg extends uvm_reg;
   rand uvm_reg_field phy_en;
@@ -56,7 +58,7 @@ class tx_config_reg extends uvm_reg;
     tx_fifo_en.configure(this, 1, 1, "RW", 0, 1'b0, 1, 1, 0);
     tx_prbs_en.configure(this, 1, 2, "RW", 0, 1'b0, 1, 1, 0);
     tx_idle.configure(this, 1, 3, "RW", 0, 1'b0, 1, 1, 0);
-    rsvd.configure(this, 4, 4, "RW", 0, 4'h0, 1, 0, 0);
+    rsvd.configure(this, 4, 4, "RO", 0, 4'h0, 1, 0, 0);
   endfunction
 endclass : tx_config_reg
 
@@ -83,7 +85,7 @@ class rx_config_reg extends uvm_reg;
     rx_fifo_en.configure(this, 1, 1, "RW", 0, 1'b0, 1, 1, 0);
     rx_prbs_chk_en.configure(this, 1, 2, "RW", 0, 1'b0, 1, 1, 0);
     rx_align_rst.configure(this, 1, 3, "RW", 0, 1'b0, 1, 1, 0);
-    rsvd.configure(this, 4, 4, "RW", 0, 4'h0, 1, 0, 0);
+    rsvd.configure(this, 4, 4, "RO", 0, 4'h0, 1, 0, 0);
   endfunction
 endclass : rx_config_reg
 
@@ -104,7 +106,7 @@ class data_select_reg extends uvm_reg;
     rsvd        = uvm_reg_field::type_id::create("rsvd");
     tx_data_sel.configure(this, 1, 0, "RW", 0, 1'b0, 1, 1, 0);
     rx_data_sel.configure(this, 1, 1, "RW", 0, 1'b0, 1, 1, 0);
-    rsvd.configure(this, 6, 2, "RW", 0, 6'h0, 1, 0, 0);
+    rsvd.configure(this, 6, 2, "RO", 0, 6'h0, 1, 0, 0);
   endfunction
 endclass : data_select_reg
 
@@ -125,10 +127,10 @@ class pll_config_reg extends uvm_reg;
     cp_current = uvm_reg_field::type_id::create("cp_current");
     pll_rst    = uvm_reg_field::type_id::create("pll_rst");
     pll_bypass = uvm_reg_field::type_id::create("pll_bypass");
-    // RTL resets the whole byte to 0x00 (see file header note above).
-    vco_trim.configure(this, 4, 0, "RW", 0, 4'h0, 1, 1, 0);
-    cp_current.configure(this, 2, 4, "RW", 0, 2'h0, 1, 1, 0);
-    pll_rst.configure(this, 1, 6, "RW", 0, 1'b0, 1, 1, 0);
+    // Resets to 0x68: VCO_TRIM=0x8, CP_CURRENT=0x2, PLL_RST=1, PLL_BYPASS=0.
+    vco_trim.configure(this, 4, 0, "RW", 0, 4'h8, 1, 1, 0);
+    cp_current.configure(this, 2, 4, "RW", 0, 2'h2, 1, 1, 0);
+    pll_rst.configure(this, 1, 6, "RW", 0, 1'b1, 1, 1, 0);
     pll_bypass.configure(this, 1, 7, "RW", 0, 1'b0, 1, 1, 0);
   endfunction
 endclass : pll_config_reg
@@ -150,11 +152,11 @@ class cdr_config_reg extends uvm_reg;
     cdr_fast_lock = uvm_reg_field::type_id::create("cdr_fast_lock");
     cdr_rst       = uvm_reg_field::type_id::create("cdr_rst");
     rsvd          = uvm_reg_field::type_id::create("rsvd");
-    // RTL resets the whole byte to 0x00 (see file header note above).
-    cdr_gain.configure(this, 3, 0, "RW", 0, 3'h0, 1, 1, 0);
+    // Resets to 0x14: CDR_GAIN=0x4, CDR_FAST_LOCK=0, CDR_RST=1.
+    cdr_gain.configure(this, 3, 0, "RW", 0, 3'h4, 1, 1, 0);
     cdr_fast_lock.configure(this, 1, 3, "RW", 0, 1'b0, 1, 1, 0);
-    cdr_rst.configure(this, 1, 4, "RW", 0, 1'b0, 1, 1, 0);
-    rsvd.configure(this, 3, 5, "RW", 0, 3'h0, 1, 0, 0);
+    cdr_rst.configure(this, 1, 4, "RW", 0, 1'b1, 1, 1, 0);
+    rsvd.configure(this, 3, 5, "RO", 0, 3'h0, 1, 0, 0);
   endfunction
 endclass : cdr_config_reg
 
@@ -214,6 +216,6 @@ class debug_enable_reg extends uvm_reg;
     dbg_vctrl.configure(this, 1, 0, "RW", 0, 1'b0, 1, 1, 0);
     dbg_pd.configure(this, 1, 1, "RW", 0, 1'b0, 1, 1, 0);
     dbg_fifo.configure(this, 1, 2, "RW", 0, 1'b0, 1, 1, 0);
-    rsvd.configure(this, 5, 3, "RW", 0, 5'h0, 1, 0, 0);
+    rsvd.configure(this, 5, 3, "RO", 0, 5'h0, 1, 0, 0);
   endfunction
 endclass : debug_enable_reg

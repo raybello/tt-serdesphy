@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>UVM Regression Report</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #ffffff;
+    --fg: #1a1a1a;
+    --muted: #666666;
+    --border: #dddddd;
+    --row-hover: #f5f5f5;
+    --pass-bg: #e6f6ea;
+    --pass-fg: #1a7f37;
+    --fail-bg: #fdecea;
+    --fail-fg: #c0341d;
+    --link: #0969da;
+    --code-bg: #f6f8fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0d1117;
+      --fg: #e6edf3;
+      --muted: #9198a1;
+      --border: #30363d;
+      --row-hover: #161b22;
+      --pass-bg: #0f2b1d;
+      --pass-fg: #3fb950;
+      --fail-bg: #2d1214;
+      --fail-fg: #f85149;
+      --link: #58a6ff;
+      --code-bg: #161b22;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 24px 16px;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .meta { color: var(--muted); font-size: 12px; margin-bottom: 20px; }
+  .breadcrumbs { margin-bottom: 16px; font-size: 13px; }
+  .breadcrumbs a { color: var(--link); text-decoration: none; }
+  .breadcrumbs a:hover { text-decoration: underline; }
+  table { width: 100%; border-collapse: collapse; overflow-x: auto; display: block; }
+  @media (min-width: 480px) { table { display: table; } }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  th { font-size: 12px; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+  tr:hover td { background: var(--row-hover); }
+  a.rowlink { color: var(--link); text-decoration: none; font-weight: 500; }
+  a.rowlink:hover { text-decoration: underline; }
+  button.logbtn {
+    border: 1px solid var(--border); background: transparent; color: var(--fg);
+    padding: 3px 10px; border-radius: 6px; cursor: pointer; font-size: 12px;
+  }
+  button.logbtn:hover { background: var(--row-hover); }
+  .pill { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .pill.pass { background: var(--pass-bg); color: var(--pass-fg); }
+  .pill.fail { background: var(--fail-bg); color: var(--fail-fg); }
+  code, .cmd { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; background: var(--code-bg); padding: 2px 6px; border-radius: 4px; }
+  a.countlink { color: var(--link); text-decoration: none; }
+  a.countlink:hover { text-decoration: underline; }
+  dialog {
+    width: min(900px, 92vw); max-height: 80vh; padding: 0; border: 1px solid var(--border);
+    border-radius: 10px; color: var(--fg); background: var(--bg);
+  }
+  dialog::backdrop { background: rgba(0,0,0,0.5); }
+  .modal-head { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; border-bottom: 1px solid var(--border); }
+  .modal-head h2 { font-size: 14px; margin: 0; font-family: ui-monospace, monospace; }
+  .modal-head button { border: none; background: transparent; color: var(--fg); font-size: 18px; cursor: pointer; }
+  #log-content { margin: 0; padding: 14px; overflow: auto; max-height: calc(80vh - 46px); white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+  .empty { color: var(--muted); padding: 20px 0; }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<dialog id="log-modal">
+  <div class="modal-head">
+    <h2 id="log-title"></h2>
+    <button id="log-close" aria-label="Close">&times;</button>
+  </div>
+  <pre id="log-content"></pre>
+</dialog>
+
+<script>
+const REGRESSION_DATA = /*__REGRESSION_DATA__*/;
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function firstUvmError(log) {
+  const line = log.split("\n").find(l => l.includes("UVM_ERROR"));
+  return line ? line.trim() : "test failed (no UVM_ERROR line found)";
+}
+
+function findBuild(name) {
+  return REGRESSION_DATA.builds.find(b => b.build_name === name);
+}
+function findGroup(build, name) {
+  return build.groups.find(g => g.group_name === name);
+}
+
+function openLog(title, log) {
+  document.getElementById("log-title").textContent = title;
+  document.getElementById("log-content").textContent = log;
+  document.getElementById("log-modal").showModal();
+}
+
+function statusPill(status, passLabel, failLabel) {
+  const label = status === "pass" ? passLabel : failLabel;
+  return `<span class="pill ${status}">${esc(label)}</span>`;
+}
+
+function renderMain() {
+  const rows = REGRESSION_DATA.builds.map((b, bi) => `
+    <tr>
+      <td><a class="rowlink" href="#/build/${encodeURIComponent(b.build_name)}">${esc(b.build_name)}</a></td>
+      <td><button class="logbtn" data-log-build="${bi}">view log</button></td>
+      <td>${statusPill(b.status, "build passed", "build failed")}</td>
+      <td>${b.build_time_sec}s</td>
+      <td><code class="cmd">${esc(b.build_command)}</code></td>
+    </tr>`).join("");
+
+  return `
+    <h1>UVM Regression Report</h1>
+    <div class="meta">Generated ${esc(REGRESSION_DATA.generated_at)} from ${esc(REGRESSION_DATA.config_file)}</div>
+    <table>
+      <thead><tr><th>Build</th><th>Log</th><th>Status</th><th>Build time</th><th>Build command</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="5" class="empty">No builds.</td></tr>`}</tbody>
+    </table>`;
+}
+
+function renderBuild(buildName) {
+  const build = findBuild(buildName);
+  if (!build) return renderNotFound(`Build "${buildName}" not found.`);
+
+  const rows = build.groups.map(g => {
+    const total = g.tests.length;
+    const pass = g.tests.filter(t => t.status === "pass").length;
+    const fail = total - pass;
+    const base = `#/build/${encodeURIComponent(buildName)}/group/${encodeURIComponent(g.group_name)}`;
+    return `
+      <tr>
+        <td><a class="rowlink" href="${base}">${esc(g.group_name)}</a></td>
+        <td>${total}</td>
+        <td><a class="countlink" href="${base}?filter=pass">${pass}</a></td>
+        <td><a class="countlink" href="${base}?filter=fail">${fail}</a></td>
+      </tr>`;
+  }).join("");
+
+  return `
+    <div class="breadcrumbs"><a href="#/">&larr; All builds</a></div>
+    <h1>${esc(buildName)}</h1>
+    <table>
+      <thead><tr><th>Group</th><th>Total</th><th>Pass</th><th>Fail</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="4" class="empty">No test groups.</td></tr>`}</tbody>
+    </table>`;
+}
+
+function renderGroup(buildName, groupName, filter) {
+  const build = findBuild(buildName);
+  const group = build && findGroup(build, groupName);
+  if (!build || !group) return renderNotFound(`Group "${groupName}" not found in build "${buildName}".`);
+
+  let tests = group.tests;
+  if (filter === "pass" || filter === "fail") {
+    tests = tests.filter(t => t.status === filter);
+  }
+
+  const rows = tests.map((t, ti) => {
+    const realIdx = group.tests.indexOf(t);
+    const statusHtml = t.status === "pass"
+      ? statusPill("pass", "test passed", "")
+      : `<span class="pill fail">${esc(firstUvmError(t.log))}</span>`;
+    return `
+      <tr>
+        <td>${esc(t.test_name)}</td>
+        <td><button class="logbtn" data-log-test="${encodeURIComponent(buildName)}|${encodeURIComponent(groupName)}|${realIdx}">view log</button></td>
+        <td>${statusHtml}</td>
+        <td>${t.run_time_sec}s</td>
+        <td><code class="cmd">${esc(t.run_command)}</code></td>
+      </tr>`;
+  }).join("");
+
+  const filterNote = filter ? ` <span class="meta">(showing ${esc(filter)}ing only &mdash; <a href="#/build/${encodeURIComponent(buildName)}/group/${encodeURIComponent(groupName)}">show all</a>)</span>` : "";
+
+  return `
+    <div class="breadcrumbs"><a href="#/">All builds</a> &rsaquo; <a href="#/build/${encodeURIComponent(buildName)}">${esc(buildName)}</a></div>
+    <h1>${esc(groupName)}${filterNote}</h1>
+    <table>
+      <thead><tr><th>Test</th><th>Log</th><th>Status</th><th>Run time</th><th>Run command</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="5" class="empty">No tests match.</td></tr>`}</tbody>
+    </table>`;
+}
+
+function renderNotFound(message) {
+  return `<div class="breadcrumbs"><a href="#/">&larr; All builds</a></div><p class="empty">${esc(message)}</p>`;
+}
+
+function parseHashRoute() {
+  const [path, query] = location.hash.replace(/^#/, "").split("?");
+  const params = new URLSearchParams(query || "");
+  const parts = path.split("/").filter(Boolean);
+  // parts: [] | ["build", name] | ["build", name, "group", group]
+  if (parts.length === 0) return { view: "main" };
+  if (parts[0] === "build" && parts.length === 2) {
+    return { view: "build", build: decodeURIComponent(parts[1]) };
+  }
+  if (parts[0] === "build" && parts.length === 4 && parts[2] === "group") {
+    return {
+      view: "group",
+      build: decodeURIComponent(parts[1]),
+      group: decodeURIComponent(parts[3]),
+      filter: params.get("filter"),
+    };
+  }
+  return { view: "notfound" };
+}
+
+function render() {
+  const route = parseHashRoute();
+  const app = document.getElementById("app");
+  if (route.view === "main") app.innerHTML = renderMain();
+  else if (route.view === "build") app.innerHTML = renderBuild(route.build);
+  else if (route.view === "group") app.innerHTML = renderGroup(route.build, route.group, route.filter);
+  else app.innerHTML = renderNotFound("Page not found.");
+}
+
+document.addEventListener("click", (e) => {
+  const buildBtn = e.target.closest("[data-log-build]");
+  if (buildBtn) {
+    const b = REGRESSION_DATA.builds[Number(buildBtn.dataset.logBuild)];
+    openLog(`${b.build_name} - build log`, b.log);
+    return;
+  }
+  const testBtn = e.target.closest("[data-log-test]");
+  if (testBtn) {
+    const [buildName, groupName, idx] = testBtn.dataset.logTest.split("|");
+    const build = findBuild(decodeURIComponent(buildName));
+    const group = findGroup(build, decodeURIComponent(groupName));
+    const test = group.tests[Number(idx)];
+    openLog(`${test.test_name} - run log`, test.log);
+  }
+});
+
+document.getElementById("log-close").addEventListener("click", () => {
+  document.getElementById("log-modal").close();
+});
+document.getElementById("log-modal").addEventListener("click", (e) => {
+  if (e.target.id === "log-modal") document.getElementById("log-modal").close();
+});
+
+window.addEventListener("hashchange", render);
+render();
+</script>
+</body>
+</html>

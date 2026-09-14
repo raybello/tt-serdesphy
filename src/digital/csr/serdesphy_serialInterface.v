@@ -45,7 +45,16 @@ module serdesphy_serialInterface (
     output reg         sdaOut,
     input  wire [1:0]  startStopDetState,
     output reg         clearStartStopDet,
-    output reg         writeEn
+    output reg         writeEn,
+
+    // Read notification: pulses for one clk cycle each time a register
+    // byte is captured off dataIn to be shifted out over I2C (i.e. once
+    // per byte actually read by the host), with readAddr holding the
+    // register address that was read. Used by serdesphy_csr_top to
+    // implement "clear on read" for the sticky STATUS bits (docs/info.md
+    // section 5.7). Mirrors writeEn/regAddr's own timing convention.
+    output reg         readEn,
+    output reg  [7:0]  readAddr
 );
 
     // Diagram signals declarations
@@ -60,6 +69,8 @@ module serdesphy_serialInterface (
     reg [7:0] next_dataOut;
     reg next_clearStartStopDet;
     reg [7:0] next_regAddr;
+    reg next_readEn;
+    reg [7:0] next_readAddr;
 
     // BINARY ENCODED state machine: SISt
     // State codes definitions:
@@ -96,6 +107,8 @@ module serdesphy_serialInterface (
         next_bitCnt = bitCnt;
         next_clearStartStopDet = clearStartStopDet;
         next_regAddr = regAddr;
+        next_readEn = 1'b0;
+        next_readAddr = readAddr;
 
         case (CurrState_SISt)
             START: begin
@@ -114,6 +127,12 @@ module serdesphy_serialInterface (
                 if (streamSt == `STREAM_READ) begin
                     NextState_SISt = READ_RD_LOOP;
                     next_txData = dataIn;
+                    // dataIn == the register selected by the CURRENT
+                    // (pre-increment) regAddr - capture both here, before
+                    // regAddr advances below, so readAddr always names the
+                    // register whose byte is being shifted out this beat.
+                    next_readEn = 1'b1;
+                    next_readAddr = regAddr;
                     next_regAddr = regAddr + 1'b1;
                     next_bitCnt = 3'b001;
                 end else begin
@@ -292,6 +311,8 @@ module serdesphy_serialInterface (
             txData <= 8'h00;
             rxData <= 8'h00;
             bitCnt <= 3'b000;
+            readEn <= 1'b0;
+            readAddr <= 8'h00;
         end else begin
             sdaOut <= next_sdaOut;
             writeEn <= next_writeEn;
@@ -302,6 +323,8 @@ module serdesphy_serialInterface (
             txData <= next_txData;
             rxData <= next_rxData;
             bitCnt <= next_bitCnt;
+            readEn <= next_readEn;
+            readAddr <= next_readAddr;
         end
     end
 

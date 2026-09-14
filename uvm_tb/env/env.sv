@@ -6,6 +6,7 @@ class serdesphy_virtual_sequencer extends uvm_sequencer;
 
   clk_reset_sequencer clk_reset_sqr;
   i2c_sequencer        i2c_sqr;
+  phy_io_sequencer     phy_io_sqr;
 
   function new(string name = "serdesphy_virtual_sequencer", uvm_component parent = null);
     super.new(name, parent);
@@ -21,6 +22,7 @@ class serdesphy_env extends uvm_env;
 
   clk_reset_agent             clk_reset_agt;
   i2c_agent                   i2c_agt;
+  phy_io_agent                phy_io_agt;
   coverage                    cov;
   serdesphy_reg_block         regmodel;
   csr2i2c_adapter             reg2i2c_adapter;
@@ -35,6 +37,7 @@ class serdesphy_env extends uvm_env;
 
     clk_reset_agt = clk_reset_agent::type_id::create("clk_reset_agt", this);
     i2c_agt       = i2c_agent::type_id::create("i2c_agt", this);
+    phy_io_agt    = phy_io_agent::type_id::create("phy_io_agt", this);
     cov           = coverage::type_id::create("cov", this);
     vseqr         = serdesphy_virtual_sequencer::type_id::create("vseqr", this);
 
@@ -53,6 +56,7 @@ class serdesphy_env extends uvm_env;
 
     vseqr.clk_reset_sqr = clk_reset_agt.sequencer;
     vseqr.i2c_sqr        = i2c_agt.sequencer;
+    vseqr.phy_io_sqr     = phy_io_agt.sequencer;
 
     regmodel.csr_map.set_sequencer(i2c_agt.sequencer, reg2i2c_adapter);
   endfunction : connect_phase

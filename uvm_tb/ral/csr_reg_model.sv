@@ -145,12 +145,24 @@ class serdesphy_reg_block extends uvm_reg_block;
 
   // Polls STATUS until `field` reads as `exp_val`, or `timeout_ns`
   // elapses (0 = wait forever). Returns 1 on success, 0 on timeout.
+  //
+  // Tracks the deadline against $realtime (elapsed simulation time), not
+  // a per-iteration counter: a single I2C read of STATUS takes on the
+  // order of tens of us of simulated time (a full START+ADDR+REGADDR+
+  // repeated-START+ADDR+READ+STOP transaction bit-banged at i2c_driver's
+  // BIT_PERIOD), which used to dwarf the fixed #(1us) this task waited
+  // between iterations while only ever crediting that same 1us toward
+  // timeout_ns - so a "50us timeout" could silently take several ms of
+  // real simulated time before giving up. For sub-100us lock-time specs
+  // (docs/info.md PLL_LOCK/CDR_LOCK), prefer polling the signal directly
+  // over the DUT's virtual interface instead of through this task -
+  // I2C's own transaction latency is not a fair way to measure it.
   virtual task automatic poll_status_field(input uvm_reg_field field, input bit exp_val,
                                            input longint unsigned timeout_ns,
                                            output bit success,
                                            input uvm_sequence_base parent = null);
-    uvm_reg_data_t   status_val;
-    longint unsigned waited_ns = 0;
+    uvm_reg_data_t status_val;
+    realtime        start_time = $realtime;
     success = 1'b0;
     forever begin
       read_status(status_val, parent);
@@ -158,9 +170,7 @@ class serdesphy_reg_block extends uvm_reg_block;
         success = 1'b1;
         return;
       end
-      if (timeout_ns != 0 && waited_ns >= timeout_ns) return;
-      #(1us);
-      waited_ns += 1000;
+      if (timeout_ns != 0 && (($realtime - start_time) >= timeout_ns)) return;
     end
   endtask : poll_status_field
 

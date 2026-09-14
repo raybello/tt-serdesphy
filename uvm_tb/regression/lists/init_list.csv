@@ -1,0 +1,8 @@
+<NUM_SIMS>,<TEST_NAME>,<RUN_OPTIONS>,<SIMULATION_NAME>
+2,init_sequence_test,-s 1,init_sequence_test
+2,reset_test,-s 1,reset_test
+2,clk_test,-s 1,clk_test
+2,basic_test,-s 1,basic_test
+2,pll_lock_test,-s 1,pll_lock_test
+2,tx_fifo_test,-s 1,tx_fifo_test
+2,test_mode_test,-s 1,test_mode_test

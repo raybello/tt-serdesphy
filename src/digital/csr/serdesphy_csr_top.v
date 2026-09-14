@@ -58,7 +58,14 @@ module serdesphy_csr_top (
     input  wire        rx_underflow,     // RX FIFO underflow (sticky)
     input  wire        pll_lock,         // PLL lock indicator
     input  wire        cdr_lock,         // CDR lock indicator
-    input  wire        prbs_err          // PRBS error detected (sticky)
+    input  wire        prbs_err,         // PRBS error detected (sticky)
+
+    // Clear-on-read pulse for the sticky PRBS_ERR/FIFO_ERR bits
+    // (docs/info.md 5.7): asserted for one clk cycle whenever the host
+    // reads STATUS (0x06) over I2C. Fans out to tx_top/rx_top's
+    // overflow/underflow sticky registers and prbs_checker's sticky
+    // error register.
+    output wire        status_read_pulse
 );
 
     // Register interface wires from I2C slave
@@ -75,9 +82,19 @@ module serdesphy_csr_top (
     wire       reg_write_strobe;
     wire [7:0] reg_write_addr;
 
+    // Read notification, used below to build status_read_pulse
+    wire       reg_read_strobe;
+    wire [7:0] reg_read_addr;
+
     // FIFO error aggregation
     wire fifo_err;
     assign fifo_err = tx_overflow || tx_underflow || rx_overflow || rx_underflow;
+
+    // Clear-on-read: pulses exactly when the host's I2C read lands on the
+    // STATUS register address (0x06), regardless of ACK/NAK on that byte -
+    // "reading" is defined as the byte having been shifted out, matching
+    // real-hardware clear-on-read semantics.
+    assign status_read_pulse = reg_read_strobe && (reg_read_addr[2:0] == 3'h6);
 
     //========================================
     // Status Register Building (0x06 - Read Only)
@@ -116,7 +133,11 @@ module serdesphy_csr_top (
 
         // Write notification
         .reg_write_strobe (reg_write_strobe),
-        .reg_write_addr   (reg_write_addr)
+        .reg_write_addr   (reg_write_addr),
+
+        // Read notification
+        .reg_read_strobe  (reg_read_strobe),
+        .reg_read_addr    (reg_read_addr)
     );
 
     //========================================

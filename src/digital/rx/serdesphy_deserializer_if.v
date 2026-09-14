@@ -60,20 +60,16 @@ module serdesphy_deserializer_if (
     reg [2:0]   error_count;
     reg [7:0]   lock_counter;
     
-    // Clock domain crossing registers
-    reg         deserializer_data_24m;
-    reg         deserializer_data_valid_24m;
-    reg [2:0]   sync_stage;
-    
     // Data validity tracking
     reg         last_data;
     reg         transition_detected;
     reg [7:0]   transition_counter;
     
-    // Clock domain crossing for data signals (240MHz to 24MHz)
+    // Transition/activity tracking, used by DESIF_STATE_ACQUIRE below to
+    // confirm real data activity before declaring the interface active.
     always @(posedge clk_240m_rx or negedge rst_n_240m_rx) begin
         if (!rst_n_240m_rx) begin
-            sync_stage <= 3'b000;
+            last_data <= 1'b0;
         end else begin
             // Detect data transitions for validity indication
             if (deserializer_data != last_data) begin
@@ -86,21 +82,20 @@ module serdesphy_deserializer_if (
         end
     end
     
-    // Synchronize data to 24MHz domain
-    always @(posedge clk_24m or negedge rst_n_24m) begin
-        if (!rst_n_24m) begin
-            sync_stage <= 3'b000;
-            deserializer_data_24m <= 1'b0;
-            deserializer_data_valid_24m <= 1'b0;
-        end else begin
-            // Multi-stage synchronizer for data
-            sync_stage <= {sync_stage[1:0], deserializer_data};
-            deserializer_data_24m <= sync_stage[2];
-            
-            // Generate valid pulse when data changes and deserializer is locked
-            deserializer_data_valid_24m <= transition_detected && deserializer_lock && 
-                                         deserializer_active_reg;
-        end
+    // rx_serial_data/rx_serial_valid must update every clk_240m_rx cycle
+    // to match rx_top's bit-at-a-time 240MHz accumulator - resampling
+    // into the slower clk_24m domain (as this block originally did, and
+    // gating "valid" on transition_detected rather than on the interface
+    // simply being active) drops the vast majority of bits and desyncs
+    // Manchester word framing entirely. deserializer_data is already
+    // synchronous to clk_240m_rx at the PMA (the RX differential receiver
+    // is clocked by the same CDR-recovered clock), so this just needs a
+    // clean single-cycle register, not an actual domain crossing - see
+    // docs/implementation/01-spec-vs-implementation.md Finding 2.2.
+    reg rx_serial_data_240m;
+    always @(posedge clk_240m_rx or negedge rst_n_240m_rx) begin
+        if (!rst_n_240m_rx) rx_serial_data_240m <= 1'b0;
+        else                rx_serial_data_240m <= deserializer_data;
     end
     
     // Deserializer state machine (24MHz domain)
@@ -252,8 +247,11 @@ module serdesphy_deserializer_if (
     assign deserializer_clock = deserializer_clock_reg;
     assign deserializer_reset_n = deserializer_reset_n_reg;
     
-    assign rx_serial_data = deserializer_bypass ? deserializer_data : deserializer_data_24m;
-    assign rx_serial_valid = deserializer_bypass ? 1'b1 : deserializer_data_valid_24m;
+    assign rx_serial_data = deserializer_bypass ? deserializer_data : rx_serial_data_240m;
+    // Valid every clk_240m_rx cycle once the interface has completed its
+    // enable/reset/lock sequencing (matches what rx_top's accumulator
+    // needs: a new bit every cycle, not just on detected transitions).
+    assign rx_serial_valid = deserializer_bypass ? 1'b1 : deserializer_active_reg;
     assign rx_serial_error = data_error_reg || deserializer_error;
     
     assign deserializer_active = deserializer_active_reg;

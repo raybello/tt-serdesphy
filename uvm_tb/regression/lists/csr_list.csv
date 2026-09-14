@@ -1,0 +1,4 @@
+<NUM_SIMS>,<TEST_NAME>,<RUN_OPTIONS>,<SIMULATION_NAME>
+2,corner_case_test,-s 1,corner_case_test
+2,csr_rdwr_test,-s 1,csr_rdwr_test
+2,init_sequence_test,-s 1,init_sequence_test

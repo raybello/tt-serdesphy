@@ -36,7 +36,6 @@ module serdesphy_tx_data_mux (
     reg [7:0]  output_data_reg;
     reg         output_valid_reg;
     reg         fifo_ready_reg;
-    reg         prbs_ready_reg;
     reg [1:0]  mux_state;
     
     // State encoding
@@ -62,19 +61,16 @@ module serdesphy_tx_data_mux (
             output_data_reg <= 8'h00;
             output_valid_reg <= 0;
             fifo_ready_reg <= 0;
-            prbs_ready_reg <= 0;
         end else if (!enable) begin
             mux_state <= STATE_IDLE;
             output_data_reg <= 8'h00;
             output_valid_reg <= 0;
             fifo_ready_reg <= 0;
-            prbs_ready_reg <= 0;
         end else begin
             case (mux_state)
                 STATE_IDLE: begin
                     output_valid_reg <= 0;
                     fifo_ready_reg   <= 1'b0;  // No pop in IDLE
-                    prbs_ready_reg   <= 1'b1;
                     mux_state        <= STATE_SELECT;
                 end
 
@@ -90,14 +86,12 @@ module serdesphy_tx_data_mux (
                                 output_data_reg  <= fifo_data;
                                 output_valid_reg <= 1;
                                 fifo_ready_reg   <= 1'b1;  // Pop: rp advances THIS posedge
-                                prbs_ready_reg   <= 1'b1;
                             end
                         end else begin
                             // PRBS path
                             if (prbs_valid) begin
                                 output_data_reg  <= prbs_data;
                                 output_valid_reg <= 1;
-                                prbs_ready_reg   <= 1'b0;
                                 fifo_ready_reg   <= 1'b0;
                             end
                         end
@@ -117,7 +111,6 @@ module serdesphy_tx_data_mux (
 
                 STATE_READY: begin
                     fifo_ready_reg <= 1'b0;
-                    prbs_ready_reg <= 1'b1;
                     mux_state      <= STATE_IDLE;
                 end
 
@@ -127,11 +120,31 @@ module serdesphy_tx_data_mux (
             endcase
         end
     end
-    
+
     // Output assignments
     assign mux_data = output_data_reg;
     assign mux_valid = output_valid_reg;
     assign fifo_ready = fifo_ready_reg;
-    assign prbs_ready = prbs_ready_reg;
+
+    // prbs_ready: unlike fifo_ready (an explicit single-cycle pop pulse,
+    // asserted only exactly when a FIFO word is actually consumed),
+    // prbs_ready was previously a REGISTER proactively set to 1 a state
+    // (or two) ahead of actually being ready to capture - in STATE_IDLE,
+    // a full cycle before this mux even reaches STATE_SELECT, and again
+    // in STATE_READY, a cycle before returning to STATE_IDLE. Since
+    // serdesphy_prbs_generator.v's STATE_IDLE and STATE_OUTPUT both
+    // advance (generate a new byte) the moment they see prbs_ready high,
+    // that early/premature assertion let the generator race ahead and
+    // produce - and silently lose, since this mux only samples whatever
+    // prbs_data happens to be present at the single cycle it actually
+    // checks prbs_valid in STATE_SELECT - roughly every other byte before
+    // this mux was ever in a state to capture it. Fixed by deriving
+    // prbs_ready combinationally from this mux's own live state instead:
+    // true only during the exact cycles this mux is actually waiting in
+    // STATE_SELECT with nothing captured yet, mirroring fifo_ready's
+    // already-correct "pulse only at the moment of real consumption"
+    // shape.
+    assign prbs_ready = (mux_state == STATE_SELECT) && !output_valid_reg &&
+                         !tx_idle && (tx_data_sel == 1'b0);
 
 endmodule

@@ -41,7 +41,12 @@ module serdesphy_rx_top (
     output wire       prbs_err,         // PRBS error indication
 
     // Clock domain status
-    input  wire       clk_240m_rx_en    // 240MHz RX clock enable
+    input  wire       clk_240m_rx_en,   // 240MHz RX clock enable
+
+    // Clears rx_overflow/rx_underflow/prbs_err (STATUS.FIFO_ERR and
+    // STATUS.PRBS_ERR are sticky and clear on an I2C read of STATUS -
+    // docs/info.md 5.7)
+    input  wire       status_read_clear
 );
 
     // RX Controller State Machine
@@ -103,32 +108,89 @@ module serdesphy_rx_top (
     reg         manchester_error_sticky;
     reg         serial_error_sticky;
     
-    reg         pattern_detected;
-    reg [4:0]   invalid_count;  // tolerance counter for LOCKED state
+    // Counts consecutive clk_240m_rx cycles with no valid Manchester
+    // window found, while aligned (ALIGN_STATE_LOCKED below) - i.e. time
+    // since the last confirmed-good word, not a count of discrete
+    // "invalid windows" (manchester_word_valid, by construction below,
+    // only ever pulses for a window already confirmed valid - there is no
+    // separate "saw an invalid window" event to count anymore). Sized and
+    // thresholded to comfortably span a normal idle gap between words
+    // (tens to ~100ns under minimum-effective-rate host pacing) while
+    // still detecting genuine loss of signal within a few us - see
+    // ALIGN_STATE_LOCKED.
+    reg [11:0]  no_valid_word_count;
 
     // Additional interface wires
     wire        word_disassembler_ready;
     wire        prbs_checker_busy;
 
-    // Instantiate Manchester decoder
+    // Valid Manchester check: every 2-bit symbol (bits [2i+1:2i]) must
+    // differ, i.e. be 01 or 10 (never 00 or 11).
+    function automatic bit valid_manchester_word(input [15:0] w);
+        valid_manchester_word = (w[1]  ^ w[0])  && (w[3]  ^ w[2])  &&
+                                (w[5]  ^ w[4])  && (w[7]  ^ w[6])  &&
+                                (w[9]  ^ w[8])  && (w[11] ^ w[10]) &&
+                                (w[13] ^ w[12]) && (w[15] ^ w[14]);
+    endfunction
+
+    // Instantiate Manchester decoder - clocked by clk_240m_rx (the
+    // domain manchester_word_reg/manchester_word_valid actually live in),
+    // not clk_24m. See the "Serial input accumulation" block below: once
+    // clk_240m_rx became the genuinely independent CDR-recovered clock
+    // (docs/implementation/01-spec-vs-implementation.md Finding 2.2),
+    // manchester_word_valid's single-cycle pulse (asserted 1 out of every
+    // 16 clk_240m_rx cycles) could be silently missed by a clk_24m-domain
+    // reader - clk_24m's ~41.67ns period is longer than the ~66.7ns
+    // between words but not by enough margin to guarantee catching a
+    // single fast-domain cycle, and this specific rate ratio (240MHz/16
+    // words vs 24MHz) is too tight for a hand-rolled toggle/pulse
+    // synchronizer to guarantee lossless capture either. The actual CDC
+    // boundary belongs at the FIFO below instead, which already exists
+    // for exactly this purpose (gray-coded pointers tolerate arbitrary
+    // relative clock rates without relying on catching a narrow pulse).
     serdesphy_manchester_decoder u_manchester_decoder (
-        .clk             (clk_24m),
-        .rst_n           (rst_n_24m),
+        .clk             (clk_240m_rx),
+        .rst_n           (rst_n_240m_rx),
         .manchester_data (manchester_word_reg),
-        .data_valid      (manchester_word_valid && rx_en && rx_aligned_reg),
+        // Not additionally gated on rx_aligned_reg: manchester_word_valid
+        // is already only ever pulsed for a window confirmed valid by
+        // valid_manchester_word() (see the accumulation block above), so
+        // there is no "unvalidated noise" for an alignment gate to guard
+        // against here. Gating on rx_aligned_reg would also cost the
+        // very word that causes alignment to be declared in the first
+        // place: rx_aligned_reg (set by the alignment FSM, a separate
+        // always block) only becomes readable as 1 one clk_240m_rx cycle
+        // after the triggering manchester_word_valid pulse, by which time
+        // that specific pulse has already ended.
+        .data_valid      (manchester_word_valid && rx_en),
         .decoded_data    (manchester_decoder_out),
         .decode_valid    (manchester_decoder_valid),
         .decode_error    (manchester_decoder_error)
     );
 
-    // Instantiate RX FIFO
+    // Instantiate RX FIFO - this is the actual CDC boundary between the
+    // clk_240m_rx (CDR-recovered) and clk_24m domains, using
+    // serdesphy_rx_fifo's existing dual-clock gray-code pointer design
+    // (already correct; it just used to be instantiated with both clocks
+    // tied to clk_24m because there was nothing genuinely asynchronous
+    // upstream of it before Finding 2.2's fix).
     serdesphy_rx_fifo u_rx_fifo (
-        // Write clock domain (24MHz recovered)
-        .wr_clk          (clk_24m),
-        .wr_rst_n        (rst_n_24m),
+        // Write clock domain (CDR-recovered 240MHz, ÷16 by the Manchester
+        // decoder above to one 8-bit word every 16 clk_240m_rx cycles)
+        .wr_clk          (clk_240m_rx),
+        .wr_rst_n        (rst_n_240m_rx),
         .wr_enable       (rx_en && rx_fifo_en),
         .wr_data         (manchester_decoder_out),
-        .wr_valid        (manchester_decoder_valid),
+        // manchester_decoder_valid alone pulses for every 16-bit window,
+        // decoded or not: with no link activity (TX idle, or before
+        // alignment), that window is a constant, non-toggling level with
+        // no valid Manchester transitions, which the decoder correctly
+        // flags via decode_error - forwarding it into the FIFO anyway
+        // would flood all 8 entries with fake all-zero "bytes" every
+        // 66.7ns, pushing out real data faster than it could ever be
+        // read back out. Only cleanly-decoded windows should ever reach
+        // the FIFO.
+        .wr_valid        (manchester_decoder_valid && !manchester_decoder_error),
 
         // Read clock domain (24MHz system)
         .rd_clk          (clk_24m),
@@ -156,13 +218,16 @@ module serdesphy_rx_top (
         .rx_word_ready  (word_disassembler_ready)
     );
 
-    // Instantiate PRBS checker
+    // Instantiate PRBS checker - clocked by clk_240m_rx for the same
+    // reason as the Manchester decoder above: it consumes
+    // manchester_decoder_valid, the same fast-domain pulse.
     serdesphy_prbs_checker u_prbs_checker (
-        .clk             (clk_24m),
-        .rst_n           (rst_n_24m),
+        .clk             (clk_240m_rx),
+        .rst_n           (rst_n_240m_rx),
         .enable          (rx_en && rx_prbs_chk_en),
         .reset_counter   (rx_align_rst),
         .reset_alignment (rx_align_rst),
+        .clear_sticky    (status_read_clear),
         .received_data   (manchester_decoder_out),
         .data_valid      (manchester_decoder_valid),
         .prbs_error      (prbs_error_wire),
@@ -171,6 +236,38 @@ module serdesphy_rx_top (
     );
     
     // Serial input accumulation (240MHz domain)
+    //
+    // Checks the sliding 16-bit window with valid_manchester_word() every
+    // single cycle, unconditionally - not just while unaligned, and not
+    // on any fixed 16-cycle schedule either (a fixed-stride "skip ahead
+    // 16 after a match" scheme was tried and measurably broke: RX's
+    // serial samples come from cdr_clk_240m, the CDR's own independently
+    // recovered behavioral VCO clock, which does not advance in lockstep
+    // with clk_240m_tx bit-for-bit - a real 16-bit TX burst was observed
+    // spanning quite a different number of clk_240m_rx cycles than 16,
+    // so any scheme assuming exactly 16 RX cycles per word silently
+    // desynced and skipped roughly every other real word).
+    //
+    // This works because genuine idle gaps between words are reliably
+    // Manchester-INVALID here: rx_serial_valid does not actually track
+    // TX activity (see serdesphy_deserializer_if.v - it reflects the
+    // deserializer's own enable/lock state, not per-word framing), so
+    // between real bursts the line simply carries TX's driven-low idle
+    // level, i.e. genuine non-toggling zero bits - every 2-bit pair of
+    // pure zeros is invalid Manchester, so a partially-flushed window
+    // (old word's tail bits mixed with idle zeros, or idle zeros mixed
+    // with a new word's leading bits) reliably fails the check until the
+    // window is composed entirely of one real word's own 16 bits. There
+    // is therefore no separate "trust the counter" steady-state mode
+    // needed, nor the ambiguity a truly gapless continuous bitstream
+    // would create (any even-bit-offset window of THAT would trivially
+    // validate too) - this design's idle behavior avoids that case.
+    //
+    // manchester_word_valid is therefore always a genuine, pre-validated
+    // one-cycle pulse: it only ever pulses for a window
+    // valid_manchester_word() already confirmed, so nothing downstream
+    // (the decoder in particular) needs to separately gate on alignment
+    // status to avoid decoding noise.
     always @(posedge clk_240m_rx or negedge rst_n_240m_rx) begin
         if (!rst_n_240m_rx) begin
             serial_shift_reg <= 16'h0000;
@@ -179,19 +276,12 @@ module serdesphy_rx_top (
             manchester_word_valid <= 1'b0;
         end else if (clk_240m_rx_en && rx_en) begin
             if (rx_serial_valid && !rx_serial_error) begin
-                if (serial_bit_count == 4'd0) begin
-                    // Start new 16-bit word
-                    serial_shift_reg <= {15'h0000, rx_serial_data};
-                    serial_bit_count <= 4'd1;
-                end else if (serial_bit_count < 4'd15) begin
-                    // Continue accumulation
-                    serial_shift_reg <= {serial_shift_reg[14:0], rx_serial_data};
-                    serial_bit_count <= serial_bit_count + 1;
-                end else begin
-                    // Word complete
-                    manchester_word_reg <= {serial_shift_reg[14:0], rx_serial_data};
+                serial_shift_reg <= {serial_shift_reg[14:0], rx_serial_data};
+                if (valid_manchester_word({serial_shift_reg[14:0], rx_serial_data})) begin
+                    manchester_word_reg   <= {serial_shift_reg[14:0], rx_serial_data};
                     manchester_word_valid <= 1'b1;
-                    serial_bit_count <= 4'd0;
+                end else begin
+                    manchester_word_valid <= 1'b0;
                 end
             end else begin
                 manchester_word_valid <= 1'b0;
@@ -277,45 +367,59 @@ module serdesphy_rx_top (
     // Simplified for behavioral simulation: lock on the FIRST valid Manchester
     // window, and stay locked through idle gaps (TX sends zeros between words).
     // Only unlock after 31 consecutive invalid windows (~3 µs of pure silence).
-    always @(posedge clk_24m or negedge rst_n_24m) begin
-        if (!rst_n_24m) begin
-            align_state   <= ALIGN_STATE_SEARCH;
-            align_count   <= 8'd0;
-            verify_count  <= 8'd0;
-            invalid_count <= 5'd0;
-            rx_aligned_reg <= 1'b0;
+    //
+    // Clocked by clk_240m_rx (not clk_24m) for the same reason as
+    // u_manchester_decoder above: it reads manchester_word_valid directly,
+    // a single-clk_240m_rx-cycle pulse.
+    // docs/info.md 4.3's "~7-cycle gaps between words" undersells the
+    // real idle gaps a min-rate host produces (see
+    // docs/implementation/00-fixes-applied.md): under continuous
+    // minimum-effective-rate (12MHz nibble) FIFO feeding, TX's own
+    // 240MHz/16 word drain rate is faster than the nibble interface can
+    // refill it, so genuine idle gaps of 100ns+ between words are normal,
+    // not exceptional. NO_VALID_WORD_TIMEOUT is sized with generous
+    // margin above that (a few us) so ordinary gaps never trip a false
+    // unlock, while still detecting genuine loss of signal reasonably
+    // quickly.
+    localparam [11:0] NO_VALID_WORD_TIMEOUT = 12'd1000;  // ~4.17us @ 240MHz
+
+    always @(posedge clk_240m_rx or negedge rst_n_240m_rx) begin
+        if (!rst_n_240m_rx) begin
+            align_state         <= ALIGN_STATE_SEARCH;
+            align_count         <= 8'd0;
+            verify_count        <= 8'd0;
+            no_valid_word_count <= 12'd0;
+            rx_aligned_reg      <= 1'b0;
         end else if (rx_align_rst || rx_state == RX_STATE_DISABLED || rx_state == RX_STATE_ERROR) begin
-            align_state   <= ALIGN_STATE_SEARCH;
-            align_count   <= 8'd0;
-            verify_count  <= 8'd0;
-            invalid_count <= 5'd0;
-            rx_aligned_reg <= 1'b0;
+            align_state         <= ALIGN_STATE_SEARCH;
+            align_count         <= 8'd0;
+            verify_count        <= 8'd0;
+            no_valid_word_count <= 12'd0;
+            rx_aligned_reg      <= 1'b0;
         end else if (rx_state == RX_STATE_ALIGNING) begin
             case (align_state)
                 ALIGN_STATE_SEARCH: begin
-                    if (manchester_word_valid && pattern_detected) begin
+                    // manchester_word_valid only ever pulses for a window
+                    // the accumulation block above already confirmed via
+                    // valid_manchester_word() - no separate pattern check
+                    // needed here.
+                    if (manchester_word_valid) begin
                         // Lock immediately on first valid Manchester window
-                        align_state    <= ALIGN_STATE_LOCKED;
-                        rx_aligned_reg <= 1'b1;
-                        invalid_count  <= 5'd0;
+                        align_state         <= ALIGN_STATE_LOCKED;
+                        rx_aligned_reg      <= 1'b1;
+                        no_valid_word_count <= 12'd0;
                     end
                 end
 
                 ALIGN_STATE_LOCKED: begin
                     if (manchester_word_valid) begin
-                        if (pattern_detected) begin
-                            invalid_count <= 5'd0;
-                        end else begin
-                            // Tolerate idle gaps (TX has ~7-cycle gaps between words)
-                            // Unlock only after 31 consecutive invalid windows
-                            if (invalid_count < 5'd31)
-                                invalid_count <= invalid_count + 1;
-                            else begin
-                                align_state    <= ALIGN_STATE_SEARCH;
-                                rx_aligned_reg <= 1'b0;
-                                invalid_count  <= 5'd0;
-                            end
-                        end
+                        no_valid_word_count <= 12'd0;
+                    end else if (no_valid_word_count < NO_VALID_WORD_TIMEOUT) begin
+                        no_valid_word_count <= no_valid_word_count + 1'b1;
+                    end else begin
+                        align_state         <= ALIGN_STATE_SEARCH;
+                        rx_aligned_reg      <= 1'b0;
+                        no_valid_word_count <= 12'd0;
                     end
                 end
 
@@ -325,28 +429,17 @@ module serdesphy_rx_top (
             endcase
         end
     end
-    
-    // Pattern detection logic
-    always @(posedge clk_24m or negedge rst_n_24m) begin
-        if (!rst_n_24m) begin
-            pattern_detected <= 1'b0;
-        end else if (manchester_word_valid) begin
-            // Valid Manchester: every 2-bit symbol (bits [2i+1:2i]) must differ,
-            // i.e. be 01 or 10 (never 00 or 11). Check all 8 symbols in the 16-bit word.
-            pattern_detected <= (manchester_word_reg[1]  ^ manchester_word_reg[0])  &&
-                                (manchester_word_reg[3]  ^ manchester_word_reg[2])  &&
-                                (manchester_word_reg[5]  ^ manchester_word_reg[4])  &&
-                                (manchester_word_reg[7]  ^ manchester_word_reg[6])  &&
-                                (manchester_word_reg[9]  ^ manchester_word_reg[8])  &&
-                                (manchester_word_reg[11] ^ manchester_word_reg[10]) &&
-                                (manchester_word_reg[13] ^ manchester_word_reg[12]) &&
-                                (manchester_word_reg[15] ^ manchester_word_reg[14]);
-        end
-    end
-    
-    // Data flow control
-    always @(posedge clk_24m or negedge rst_n_24m) begin
-        if (!rst_n_24m) begin
+
+    // Data flow control - clocked by clk_240m_rx: reads
+    // manchester_decoder_valid (a single clk_240m_rx-cycle pulse) and
+    // rx_fifo_full_wire (now driven by rx_fifo's wr_clk=clk_240m_rx side),
+    // same reasoning as the blocks above. manchester_data_valid only
+    // gates the RX_STATE_ACQUIRING->ACTIVE transition (rx_active status),
+    // not the actual FIFO data path (rx_fifo's own wr_valid/rd_read_enable
+    // drive that directly) - but it would still get stuck permanently low
+    // if read from clk_24m instead, leaving rx_active wedged at 0.
+    always @(posedge clk_240m_rx or negedge rst_n_240m_rx) begin
+        if (!rst_n_240m_rx) begin
             manchester_data_valid <= 1'b0;
             fifo_write_enable <= 1'b0;
             fifo_read_enable <= 1'b0;
@@ -360,13 +453,18 @@ module serdesphy_rx_top (
         end
     end
     
-    // Sticky error handling
+    // Sticky error handling. status_read_clear takes priority over a
+    // same-cycle set so a read always observes-then-clears rather than
+    // racing a fresh overflow/underflow into "still stuck".
     always @(posedge clk_24m or negedge rst_n_24m) begin
         if (!rst_n_24m) begin
             overflow_sticky <= 1'b0;
             underflow_sticky <= 1'b0;
             manchester_error_sticky <= 1'b0;
             serial_error_sticky <= 1'b0;
+        end else if (status_read_clear) begin
+            overflow_sticky <= 1'b0;
+            underflow_sticky <= 1'b0;
         end else begin
             if (rx_fifo_overflow_wire) overflow_sticky <= 1'b1;
             if (rx_fifo_underflow_wire) underflow_sticky <= 1'b1;
