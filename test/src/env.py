@@ -264,9 +264,27 @@ class PHYController:
         await self.i2c.write_register(RegisterMap.RX_CONFIG, value)
     
     async def configure_data_path(self, tx_source='fifo', rx_source='fifo'):
-        """Configure data path routing"""
+        """Configure data path routing.
+
+        tx_data_sel and rx_data_sel have OPPOSITE polarities on the RTL
+        side, confirmed by reading the actual live logic (not the port
+        comments, several of which are stale/backwards):
+          - tx_data_sel: 0=PRBS, 1=FIFO (serdesphy_tx_data_mux.v's
+            STATE_SELECT branch and prbs_ready derivation are the real,
+            live definition here).
+          - rx_data_sel: 0=FIFO, 1=PRBS (serdesphy_rx_top.v's rx_data/
+            rx_valid output mux).
+        rx_sel used to be backwards here (1=FIFO), silently putting RX
+        into PRBS-status mode whenever a test asked for 'fifo'. In that
+        state rx_valid aliases to manchester_decoder_valid - a
+        single-cycle pulse in the fast CDR-recovered clock domain -
+        instead of the clk_24m-domain word_disassembler_valid, so a
+        dut.clk-synchronous monitor only catches it by the luck of
+        sampling within that narrow window: exactly the intermittent
+        "no rx_valid pulses observed" failures this caused.
+        """
         tx_sel = 1 if tx_source == 'fifo' else 0
-        rx_sel = 1 if rx_source == 'fifo' else 0
+        rx_sel = 0 if rx_source == 'fifo' else 1
         value = (tx_sel << 0) | (rx_sel << 1)
         await self.i2c.write_register(RegisterMap.DATA_SELECT, value)
     

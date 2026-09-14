@@ -14,7 +14,15 @@ module serdesphy_tx_data_mux (
     // Control signals
     input  wire        enable,         // Enable multiplexer
     input  wire        tx_idle,        // Force idle pattern (all zeros)
-    input  wire        tx_data_sel,    // 0=FIFO, 1=PRBS
+    input  wire        tx_data_sel,    // 0=PRBS, 1=FIFO - this module's own
+                                        // STATE_SELECT branch below and
+                                        // prbs_ready's derivation are the
+                                        // actual, live definition of this
+                                        // polarity; every OTHER "0=FIFO,
+                                        // 1=PRBS" comment on tx_data_sel
+                                        // elsewhere in the TX path (this
+                                        // used to be one of them) was
+                                        // backwards relative to this
     
     // FIFO data interface
     input  wire [7:0]  fifo_data,      // 8-bit FIFO data

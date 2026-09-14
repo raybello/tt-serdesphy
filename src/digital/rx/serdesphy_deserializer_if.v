@@ -64,19 +64,54 @@ module serdesphy_deserializer_if (
     reg         last_data;
     reg         transition_detected;
     reg [7:0]   transition_counter;
+    reg [7:0]   no_transition_run;
     
     // Transition/activity tracking, used by DESIF_STATE_ACQUIRE below to
     // confirm real data activity before declaring the interface active.
+    //
+    // transition_counter used to be missing from this reset entirely, so
+    // it started (and, since X+1 is X, permanently stayed) X in
+    // simulation instead of a real 0 - DESIF_STATE_ACQUIRE's
+    // "transition_counter >= 8'd100" exit check always evaluates to X
+    // (treated as false), so the deserializer interface could never
+    // reach DESIF_STATE_ACTIVE and just oscillated between
+    // DESIF_STATE_STARTING and DESIF_STATE_ACQUIRE on every lock_counter
+    // timeout instead, forever.
+    //
+    // no_transition_run counts consecutive cycles with NO detected
+    // transition, resetting to 0 the instant one occurs - this is what
+    // the data-error check below actually needs ("has real activity
+    // stopped"). It is deliberately a SEPARATE register from
+    // transition_counter above: that one is a monotonically-increasing,
+    // free-running activity counter (correct for DESIF_STATE_ACQUIRE's
+    // "have we seen at least 100 transitions total since reset" check),
+    // but an 8-bit free-running counter wraps through exactly 0 every
+    // 256 real transitions - roughly every 10-12 words at this design's
+    // transition rate - which the data-error check below used to read
+    // as "no transitions for 100+ cycles" every single time it wrapped,
+    // even though data was flowing completely normally. That spurious
+    // one-cycle rx_serial_error pulse made the accumulation FSM in
+    // serdesphy_rx_top.v skip shifting in that cycle's bit (see its
+    // "if (rx_serial_valid && !rx_serial_error)" gating), permanently
+    // shifting Manchester word framing by one bit from that point on -
+    // the root cause of the intermittent PRBS_ERR failures in
+    // tx_rx_loopback_test.
     always @(posedge clk_240m_rx or negedge rst_n_240m_rx) begin
         if (!rst_n_240m_rx) begin
             last_data <= 1'b0;
+            transition_counter <= 8'd0;
+            no_transition_run <= 8'd0;
         end else begin
             // Detect data transitions for validity indication
             if (deserializer_data != last_data) begin
                 transition_detected <= 1'b1;
                 transition_counter <= transition_counter + 1;
+                no_transition_run <= 8'd0;
             end else begin
                 transition_detected <= 1'b0;
+                if (no_transition_run != 8'hFF) begin
+                    no_transition_run <= no_transition_run + 1;
+                end
             end
             last_data <= deserializer_data;
         end
@@ -231,11 +266,15 @@ module serdesphy_deserializer_if (
             data_error_reg <= 1'b0;
             active_timeout_counter <= 8'd0;
         end else begin
-            // Error if we expect data but don't get transitions
+            // Error if we expect data but don't get transitions.
+            // no_transition_run (not transition_counter - see its
+            // declaration above) is what correctly measures "stuck", so
+            // a genuinely idle/silent line is what trips this, not a
+            // free-running counter's periodic wraparound.
             if (deserializer_active_reg && deserializer_lock &&
-                transition_counter == 8'd0 && active_timeout_counter > 8'd100) begin
+                active_timeout_counter > 8'd100 && no_transition_run > 8'd100) begin
                 data_error_reg <= 1'b1;
-            end else if (transition_counter > 8'd0) begin
+            end else if (no_transition_run == 8'd0) begin
                 data_error_reg <= 1'b0;
             end
 

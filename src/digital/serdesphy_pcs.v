@@ -40,7 +40,8 @@ descrambling etc.
     output      tx_fifo_en,         // TX FIFO enable
     output      tx_prbs_en,         // TX PRBS enable
     output      tx_idle,            // Force idle pattern
-    output      tx_data_sel,        // TX data source select (0=FIFO, 1=PRBS)
+    output      tx_data_sel,        // TX data source select (0=PRBS, 1=FIFO -
+                                     // see serdesphy_tx_data_mux.v)
     
     // CSR Interface - RX Controls
     output      rx_en,              // Receive enable
