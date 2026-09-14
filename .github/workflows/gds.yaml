@@ -54,7 +54,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: tt_submission
-          path: site/viewer/tt_submission
+          path: site/viewer/_tt_submission_dl
 
       - name: Download gds_render artifact
         uses: actions/download-artifact@v4
@@ -64,10 +64,10 @@ jobs:
 
       - name: Assemble viewer page
         run: |
-          PDK=$(jq -r '.PDK' site/viewer/tt_submission/pdk.json)
-          cp site/viewer/tt_submission/*.gds site/viewer/tinytapeout.gds
-          cp site/viewer/tt_submission/*.oas site/viewer/tinytapeout.oas
-          rm -rf site/viewer/tt_submission
+          PDK=$(jq -r '.PDK' site/viewer/_tt_submission_dl/tt_submission/pdk.json)
+          cp site/viewer/_tt_submission_dl/tt_submission/*.gds site/viewer/tinytapeout.gds
+          cp site/viewer/_tt_submission_dl/tt_submission/*.oas site/viewer/tinytapeout.oas
+          rm -rf site/viewer/_tt_submission_dl
           cat > site/viewer/index.html <<EOF
           <!DOCTYPE html>
           <html lang="en">
