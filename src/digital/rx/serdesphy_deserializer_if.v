@@ -209,28 +209,45 @@ module serdesphy_deserializer_if (
     end
     
     // Data error detection
+    //
+    // active_timeout_counter is deliberately a SEPARATE register from the
+    // FSM's lock_counter above, even though both are "count cycles since
+    // entering a state" counters. lock_counter is reused by the state
+    // machine for three different per-state purposes (RESET hold,
+    // STARTING lock debounce, ACQUIRE timeout) and is reset to 0 on every
+    // state transition; driving it from a second always block here used
+    // to silently win every posedge clk_24m (last non-blocking assignment
+    // to a variable in a given time step takes effect), forcing
+    // lock_counter back to 0 on every cycle while deserializer_active_reg
+    // was still 0 - which is always, since that's set only after passing
+    // through DESIF_STATE_RESET, whose own lock_counter increment this
+    // was clobbering. That permanently trapped the FSM in
+    // DESIF_STATE_RESET (deserializer_enable/rx_serial_valid never
+    // asserted), which is why CDR lock could never be reached downstream.
     reg data_error_reg;
+    reg [7:0] active_timeout_counter;
     always @(posedge clk_24m or negedge rst_n_24m) begin
         if (!rst_n_24m) begin
             data_error_reg <= 1'b0;
+            active_timeout_counter <= 8'd0;
         end else begin
             // Error if we expect data but don't get transitions
-            if (deserializer_active_reg && deserializer_lock && 
-                transition_counter == 8'd0 && lock_counter > 8'd100) begin
+            if (deserializer_active_reg && deserializer_lock &&
+                transition_counter == 8'd0 && active_timeout_counter > 8'd100) begin
                 data_error_reg <= 1'b1;
             end else if (transition_counter > 8'd0) begin
                 data_error_reg <= 1'b0;
             end
-            
-            // Increment lock counter in active state
+
+            // Increment timeout counter in active state
             if (deserializer_active_reg) begin
-                lock_counter <= lock_counter + 1;
+                active_timeout_counter <= active_timeout_counter + 1;
             end else begin
-                lock_counter <= 8'd0;
+                active_timeout_counter <= 8'd0;
             end
         end
     end
-    
+
     // Status monitoring
     always @(posedge clk_24m or negedge rst_n_24m) begin
         if (!rst_n_24m) begin

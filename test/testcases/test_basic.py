@@ -183,12 +183,29 @@ async def mission_mode_traffic(dut):
     dut._log.info(f"  ✓ TXP transitions observed: {transitions}")
 
     # --- Wait for CDR lock, then check RX receives data ---
-    await poll_signal_high(
-        dut,
-        lambda: int(dut.cdr_lock.value) == 1,
-        timeout_cycles=5000,
-        label="cdr_lock",
-    )
+    #
+    # The CDR's balance-window lock detector (serdesphy_ana_cdr.v) requires
+    # a minimum amount of transition activity in EVERY 256-cycle window of
+    # its recovered clock (see MIN_ACTIVITY in that file) - a real, locked
+    # link keeps seeing Manchester transitions continuously, and silence
+    # can never look "locked" by design. The nibble burst above is a brief,
+    # one-shot transmission that goes idle right after it finishes, so
+    # without ongoing traffic the CDR would never see enough activity to
+    # lock, no matter how long we wait. Keep sending data in the background
+    # for the duration of the lock wait so there's continuous activity for
+    # the CDR to lock onto - matching how a real link only locks while data
+    # is actually flowing.
+    keep_alive = cocotb.start_soon(
+        TestUtils.send_data_words(dut, num_words=10**9))
+    try:
+        await poll_signal_high(
+            dut,
+            lambda: int(dut.cdr_lock.value) == 1,
+            timeout_cycles=5000,
+            label="cdr_lock",
+        )
+    finally:
+        keep_alive.kill()
     dut._log.info("  ✓ CDR locked")
 
     # Collect rx_valid pulses over the next 500 cycles
@@ -243,7 +260,7 @@ async def csr_register_readback(dut):
         RegisterMap.DATA_SELECT: 0x03,
         RegisterMap.PLL_CONFIG: 0x5A,
         RegisterMap.CDR_CONFIG: 0x1C,
-        RegisterMap.CONTROL:    0x0F,
+        RegisterMap.CONTROL:    0x07,  # DEBUG_ENABLE: only bits [2:0] are writable (docs/info.md 5.8)
     }
 
     # Write all patterns

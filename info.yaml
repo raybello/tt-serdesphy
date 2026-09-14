@@ -28,6 +28,7 @@ project:
     - "digital/por/serdesphy_por.v"
     - "digital/common/serdesphy_debug_mux.v"
     - "digital/common/serdesphy_reset_synchronizer.v"
+    - "digital/pll/serdesphy_pll_ctrl.v"
     - "digital/tx/serdesphy_tx_top.v"
     - "digital/tx/serdesphy_manchester_encoder.v"
     - "digital/tx/serdesphy_prbs_generator.v"
