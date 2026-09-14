@@ -18,6 +18,7 @@ class cold_reset_vseq extends base_vseq;
     clk_reset_assert_rst_seq   assert_seq;
     clk_reset_start_clk_seq    start_seq;
     clk_reset_deassert_rst_seq deassert_seq;
+    int unsigned               clk_period_ps;
 
     assert_seq = clk_reset_assert_rst_seq::type_id::create("assert_seq");
     assert_seq.start(p_sequencer.clk_reset_sqr);
@@ -48,7 +49,21 @@ class cold_reset_vseq extends base_vseq;
     // and NACKs (see i2c_driver's retry loop). 150 cycles clears the
     // full POR sequence with comfortable margin, including under
     // clk_reset_full_cfg's randomized (faster) clk_period_ps.
-    #(150 * ((cfg != null) ? cfg.clk_period_ps : 41667) * 1ps);
+    //
+    // The null-check is computed into a plain int first rather than
+    // inlined as a ternary directly inside the #() expression below.
+    // The pinned simulator build this repo targets mis-lowers a
+    // "(handle != null) ? handle.field : default" ternary when it's
+    // embedded directly in a #() delay-control expression - the
+    // generated null-check fires even when the ternary's condition took
+    // the non-null branch, aborting with "Null pointer dereferenced" -
+    // even though the identical ternary pattern used in an ordinary
+    // assignment (see clk_reset_start_clk_seq.sv,
+    // clk_reset_deassert_rst_seq.sv) works fine. Computing it into
+    // clk_period_ps first, as a separate statement, avoids that
+    // lowering path entirely.
+    clk_period_ps = (cfg != null) ? cfg.clk_period_ps : 41667;
+    #(150 * clk_period_ps * 1ps);
   endtask : body
 
 endclass : cold_reset_vseq
