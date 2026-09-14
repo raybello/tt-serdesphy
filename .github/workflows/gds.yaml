@@ -37,3 +37,148 @@ jobs:
 
       - name: GL test
         uses: TinyTapeout/tt-gds-action/gl_test@ttihp26a
+
+  # Builds the GDS viewer page from the gds job's own artifacts. Living in
+  # this same workflow (rather than a separate one triggered via
+  # workflow_run) means this can just "needs: gds" and pull tt_submission/
+  # gds_render straight from this run - no cross-workflow run-id lookup,
+  # no checking whether the OTHER workflow's gds job in particular
+  # succeeded (a plain `needs: gds` failure/skip already does that for
+  # free: if gds fails, this job - and regression/publish below, which
+  # chain off it - are automatically skipped too).
+  viewer:
+    needs: gds
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download tt_submission artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tt_submission
+          path: site/viewer/tt_submission
+
+      - name: Download gds_render artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: gds_render
+          path: site/viewer
+
+      - name: Assemble viewer page
+        run: |
+          PDK=$(jq -r '.PDK' site/viewer/tt_submission/pdk.json)
+          cp site/viewer/tt_submission/*.gds site/viewer/tinytapeout.gds
+          cp site/viewer/tt_submission/*.oas site/viewer/tinytapeout.oas
+          rm -rf site/viewer/tt_submission
+          cat > site/viewer/index.html <<EOF
+          <!DOCTYPE html>
+          <html lang="en">
+          <head><meta charset="UTF-8"></head>
+          <body>
+          <script>
+            location.href = "https://gds-viewer.tinytapeout.com/?pdk=${PDK}&model=" +
+              encodeURIComponent(location.href.replace(/index\.html$/, '') + 'tinytapeout.oas');
+          </script>
+          </body>
+          </html>
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: viewer-site
+          path: site/viewer
+
+  # Runs right after viewer, before publishing: this is the UVM
+  # regression suite (independent of the GDS/viewer content itself, but
+  # sequenced here rather than in parallel so the whole gds -> viewer ->
+  # regression -> publish pipeline runs as one linear chain).
+  regression:
+    needs: viewer
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Cache Verilator build
+        id: verilator-cache
+        uses: actions/cache@v4
+        with:
+          path: /opt/verilator
+          key: verilator-daf5826610da81ac92bd798f3bd51793d52cd14f
+
+      - name: Build Verilator
+        if: steps.verilator-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git help2man perl python3 make g++ \
+            libfl2 libfl-dev zlib1g zlib1g-dev autoconf flex bison ccache
+          git clone https://github.com/verilator/verilator /tmp/verilator-src
+          git -C /tmp/verilator-src checkout daf5826610da81ac92bd798f3bd51793d52cd14f
+          cd /tmp/verilator-src
+          autoconf
+          ./configure --prefix=/opt/verilator
+          make -j"$(nproc)"
+          make install
+
+      - name: Add Verilator to PATH
+        run: echo "/opt/verilator/bin" >> "$GITHUB_PATH"
+
+      - name: Run regression
+        run: |
+          chmod +x uvm_tb/scripts/*.py
+          export PATH="$PWD/uvm_tb/scripts:$PATH"
+          regress.py -f uvm_tb/regression/config/nightly.csv
+        continue-on-error: true
+        id: run_regress
+
+      - name: Upload regression report
+        uses: actions/upload-artifact@v4
+        with:
+          name: regression-report
+          path: uvm_tb/regression/report.html
+
+      - name: Fail if regression failed
+        if: steps.run_regress.outcome == 'failure'
+        run: exit 1
+
+  publish:
+    needs: regression
+    if: always()
+    runs-on: ubuntu-24.04
+    environment:
+      name: github-pages
+    permissions:
+      pages: write
+      id-token: write
+    concurrency:
+      group: "pages"
+      cancel-in-progress: false
+    steps:
+      - name: Checkout repo (for the landing page template)
+        uses: actions/checkout@v4
+
+      - name: Download viewer site
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: viewer-site
+          path: site/viewer
+
+      - name: Download regression report
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: regression-report
+          path: site/regression
+
+      - name: Landing page
+        run: |
+          mkdir -p site
+          cp uvm_tb/scripts/pages_index.html site/index.html
+          touch site/.nojekyll
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+      - uses: actions/deploy-pages@v4
