@@ -38,7 +38,7 @@ if [ -z "$SERDESPHY_VERILATOR" ]; then
     elif [ -x "/opt/verilator/bin/verilator" ]; then
         # matches the install prefix used by .github/workflows/regress.yaml
         export SERDESPHY_VERILATOR="/opt/verilator/bin/verilator"
-        export PATH="/opt/verilator/bin:$PATH"
+        export PATH="/opt/verilator/bin:$REPO_PATH/uvm_tb/regression/scripts:$PATH"
     fi
 fi
 
