@@ -218,7 +218,7 @@ module serdesphy_ana_cdr (
                     // pd_deviation's declaration above for why this must
                     // use the signed deviation + arithmetic shift (`>>>`)
                     // rather than shifting the raw unsigned subtraction.
-                    vco_control_reg <= phase_detector_reg + (pd_deviation >>> 2);
+                    vco_control_reg <= $signed({1'b0, phase_detector_reg}) + (pd_deviation >>> 2);
                 end
                 
                 default: begin
