@@ -12,16 +12,13 @@
 // tx_rx_loopback_test.sv) and passively READS (never forces)
 // serdesphy_prbs_checker.v's internal state hierarchically.
 //
-// This works out cleanly rather than being a workaround: RX_016-019 ask
-// whether the checker correctly compares/detects/counts/resets errors,
-// not whether the link is error-free - and docs/implementation/
-// 00-fixes-applied.md section 6's documented residual CDR phase-tracking
-// gap means real mismatches DO occur reasonably often under real PRBS
-// traffic, which is exactly the raw material this test needs. Unlike
-// tx_rx_loopback_test.sv (whose pass criterion is "no errors" and is
-// therefore expected to fail given that gap), this test's pass criterion
-// is "errors are counted correctly when they occur", which is orthogonal
-// to that gap and unaffected by it.
+// Mismatches are injected deterministically over CSR: with the link
+// clean (CDR tracking correctly, no dropped words), the test first
+// checks that error_count stays at 0 (no false detections), then
+// clears RX_PRBS_CHK_EN and sets it again. serdesphy_prbs_checker.v only
+// self-seeds its LFSR after RX_ALIGN_RST, so after the re-enable it is
+// still running from a stale LFSR state and mismatches every word -
+// raw material for RX_016-018.
 
 class prbs_checker_test extends uvm_test;
 
@@ -76,6 +73,23 @@ class prbs_checker_test extends uvm_test;
       phase.drop_objection(this);
       return;
     end
+
+    // --- Clean-link baseline: clear anything accumulated during CDR
+    // acquisition, then require no false detections ---
+    env.regmodel.write_reg_by_addr(system_pkg::REG_RX_CONFIG, 8'h0D, null);  // + RX_ALIGN_RST
+    env.regmodel.write_reg_by_addr(system_pkg::REG_RX_CONFIG, 8'h05, null);  // release it
+    #(50us);
+    if (tb_top.u_system.dut.u_top.u_pcs.u_rx.u_prbs_checker.error_count !== 8'h00)
+      `uvm_error("PRBS_CHK",
+                 $sformatf("RX_016: error_count=%0d on a clean PRBS link, expected 0 (false detection)",
+                            tb_top.u_system.dut.u_top.u_pcs.u_rx.u_prbs_checker.error_count))
+    else
+      `uvm_info("PRBS_CHK", "RX_016: no false detections over 50us of clean PRBS traffic - OK", UVM_LOW)
+
+    // --- Inject mismatches: stale checker LFSR after disable/enable ---
+    env.regmodel.write_reg_by_addr(system_pkg::REG_RX_CONFIG, 8'h01, null);  // RX_PRBS_CHK_EN=0
+    #(2us);
+    env.regmodel.write_reg_by_addr(system_pkg::REG_RX_CONFIG, 8'h05, null);  // RX_PRBS_CHK_EN=1
 
     // --- RX_016/RX_017: every error_count increment corresponds to
     // exactly one detected mismatch, never more (a hardware bug that

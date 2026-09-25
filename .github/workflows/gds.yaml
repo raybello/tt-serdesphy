@@ -123,6 +123,13 @@ jobs:
       - name: Add Verilator to PATH
         run: echo "/opt/verilator/bin" >> "$GITHUB_PATH"
 
+      # Verilator's randomize() on constrained classes (the clk/reset
+      # configs) shells out to an SMT solver; without one, randomize()
+      # fails at time 0. Kept outside the Verilator build step so it also
+      # runs on a cache hit.
+      - name: Install z3
+        run: sudo apt-get install -y z3
+
       - name: Run regression
         run: |
           chmod +x uvm_tb/scripts/*.py
@@ -143,7 +150,8 @@ jobs:
 
   publish:
     needs: regression
-    if: always()
+    # github-pages environment protection only allows main to deploy
+    if: always() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
