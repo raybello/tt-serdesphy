@@ -391,12 +391,12 @@ class TestUtils:
         """Send data words with optional generator"""
         if data_generator is None:
             data_generator = lambda: random.randint(0, 15)
-        
+
         for i in range(num_words):
             data = data_generator()
             dut.tx_data.value = data
             dut.tx_valid.value = 1
-            
+
             await ClockCycles(dut.clk, 1)
             dut.tx_valid.value = 0
             await ClockCycles(dut.clk, 1)

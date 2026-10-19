@@ -1,6 +1,8 @@
-// Passively watches system_if.rx_data/rx_valid and broadcasts one
-// PHY_IO_RX_NIBBLE transaction per clk_ref_24m cycle where rx_valid is
-// high, carrying the nibble seen on rx_data that cycle.
+// Passively watches system_if.rx_data/rx_valid.
+// DDR output: when rx_valid is high at posedge, emits two PHY_IO_RX_NIBBLE
+// transactions per word — low nibble (word[3:0]) captured at posedge, then
+// high nibble (word[7:4]) captured at the following negedge.
+// (docs/spec.md §7.5: disassembler drives word[3:0] when clk=1, word[7:4] when clk=0)
 
 class phy_io_monitor extends uvm_monitor;
 
@@ -21,14 +23,24 @@ class phy_io_monitor extends uvm_monitor;
   endfunction
 
   task run_phase(uvm_phase phase);
+    bit valid_rise;
     forever begin
       @(posedge vif.clk_ref_24m);
-      if (vif.rx_valid) begin
-        phy_io_tr tr = phy_io_tr::type_id::create("rx_nibble");
-        tr.kind   = PHY_IO_RX_NIBBLE;
-        tr.nibble = vif.rx_data;
-        ap.write(tr);
-        `uvm_info("PHY_IO_MON", $sformatf("rx nibble=0x%0h", tr.nibble), UVM_HIGH)
+      valid_rise = vif.rx_valid;
+      if (valid_rise) begin
+        phy_io_tr tr_lo = phy_io_tr::type_id::create("rx_lo");
+        tr_lo.kind   = PHY_IO_RX_NIBBLE;
+        tr_lo.nibble = vif.rx_data;  // low nibble: disassembler drives word[3:0] at clk=1
+        ap.write(tr_lo);
+        `uvm_info("PHY_IO_MON", $sformatf("rx lo=0x%0h", tr_lo.nibble), UVM_HIGH)
+      end
+      @(negedge vif.clk_ref_24m);
+      if (valid_rise) begin
+        phy_io_tr tr_hi = phy_io_tr::type_id::create("rx_hi");
+        tr_hi.kind   = PHY_IO_RX_NIBBLE;
+        tr_hi.nibble = vif.rx_data;  // high nibble: disassembler drives word[7:4] at clk=0
+        ap.write(tr_hi);
+        `uvm_info("PHY_IO_MON", $sformatf("rx hi=0x%0h", tr_hi.nibble), UVM_HIGH)
       end
     end
   endtask : run_phase

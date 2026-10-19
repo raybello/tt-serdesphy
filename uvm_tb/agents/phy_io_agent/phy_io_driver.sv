@@ -1,12 +1,12 @@
-// Drives system_if.tx_data/tx_valid (one nibble per SEND_NIBBLE item,
-// held for exactly one clk_ref_24m cycle - matches
-// serdesphy_word_assembler's one-nibble-per-tx_valid-pulse protocol,
-// docs/info.md section 4.2) and system_if.lpbk_en/test_mode (SET_CONFIG).
+// Drives system_if.tx_data/tx_valid using the DDR byte protocol:
+// one SEND_BYTE item spans two half-periods — high nibble driven after
+// posedge (stable when the negedge FF samples), low nibble + tx_valid
+// driven after negedge (stable when the posedge FF samples).
+// Matches serdesphy_word_assembler's DDR capture (docs/spec.md §6.2).
 //
 // Initializes lpbk_en=1/test_mode=0 (loopback enabled, no test mode) so
-// tests that never touch this agent (basic_test, clk_test, reset_test,
-// csr_rdwr_test) see the same default system.sv used to tie off
-// statically before this agent existed.
+// tests that never touch this agent see the same default system.sv used to
+// tie off statically before this agent existed.
 
 class phy_io_driver extends uvm_driver #(phy_io_tr);
 
@@ -36,7 +36,7 @@ class phy_io_driver extends uvm_driver #(phy_io_tr);
       seq_item_port.get_next_item(item);
 
       case (item.kind)
-        PHY_IO_SEND_NIBBLE: send_nibble(item.nibble);
+        PHY_IO_SEND_BYTE: send_byte(item.byte_data);
         PHY_IO_SET_CONFIG: begin
           vif.lpbk_en   = item.lpbk_en;
           vif.test_mode = item.test_mode;
@@ -48,15 +48,22 @@ class phy_io_driver extends uvm_driver #(phy_io_tr);
     end
   endtask : run_phase
 
-  // Drives tx_data/tx_valid so exactly one clk_ref_24m rising edge sees
-  // tx_valid=1 with tx_data=nibble stable around it.
-  task automatic send_nibble(input bit [3:0] nibble);
-    @(negedge vif.clk_ref_24m);
-    vif.tx_data  = nibble;
-    vif.tx_valid = 1'b1;
+  // DDR byte transfer — drive-after-edge convention:
+  //   @posedge: drive high nibble; assembler negedge FF captures it at next negedge
+  //   @negedge: drive low nibble + tx_valid; assembler posedge FF captures both at next posedge
+  //   @posedge: word assembled (word_valid_reg=1); @negedge: deassert valid
+  task automatic send_byte(input bit [7:0] byte_val);
     @(posedge vif.clk_ref_24m);
+    vif.tx_data = byte_val[7:4];   // high nibble — stable for upcoming negedge capture
+
+    @(negedge vif.clk_ref_24m);
+    vif.tx_data  = byte_val[3:0];  // low nibble — stable for upcoming posedge capture
+    vif.tx_valid = 1'b1;
+
+    @(posedge vif.clk_ref_24m);    // assembler latches word + word_valid
     @(negedge vif.clk_ref_24m);
     vif.tx_valid = 1'b0;
-  endtask : send_nibble
+    vif.tx_data  = 4'h0;
+  endtask : send_byte
 
 endclass : phy_io_driver
