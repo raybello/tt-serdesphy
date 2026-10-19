@@ -138,6 +138,7 @@ module serdesphy_top #(
 	wire pll_lock_raw;
 	wire pll_vco_ok;
 	wire pll_cp_ok;
+	wire [7:0] pll_vco_control;
 
 	// PMA clock outputs
 	wire clk_240m_pll;
@@ -292,6 +293,7 @@ module serdesphy_top #(
 		.pll_lock_raw       (pll_lock_raw),
 		.pll_vco_ok         (pll_vco_ok),
 		.pll_cp_ok          (pll_cp_ok),
+		.pll_vco_control    (pll_vco_control),
 
 		// PLL Status
 		.pll_lock           (pll_lock),
@@ -373,6 +375,7 @@ module serdesphy_top #(
 		.pll_lock_raw       (pll_lock_raw),
 		.pll_vco_ok         (pll_vco_ok),
 		.pll_cp_ok          (pll_cp_ok),
+		.pll_vco_control_out(pll_vco_control),
 
 		// PMA Clock Outputs
 		.clk_240m_pll       (clk_240m_pll),
