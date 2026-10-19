@@ -76,11 +76,15 @@ module serdesphy_ana_pll (
         .vco_control     (loop_filter_out)
     );
     
+    // VCO control combining coarse (vco_trim) and fine (loop filter)
+    wire [7:0] vco_control_combined;
+    assign vco_control_combined = {vco_trim, loop_filter_out[3:0]};  // Coarse[7:4], Fine[3:0]
+
     // VCO
     serdesphy_ana_pll_vco u_vco (
         .rst_n          (rst_n),
         .enable         (enable && !pll_bypass),
-        .vco_control    (loop_filter_out | (vco_trim << 4)),  // Apply VCO trim
+        .vco_control    (vco_control_combined),
         .vco_out        (vco_out),
         .vco_ready      (vco_ready)
     );
