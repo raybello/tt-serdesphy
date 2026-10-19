@@ -35,19 +35,28 @@ Located in `uvm_tb/tests/cdr_freq_offset_test.sv`, this test validates:
 
 ### Running with Different Offsets
 
+The frequency offset is set at **compile-time** (not runtime) via Verilator define:
+
 ```bash
-# No offset (backward compatibility check)
-make run UVM_TEST=cdr_freq_offset_test
+# Build and run with no offset (backward compatibility)
+cd uvm_tb
+./scripts/build.py
+./scripts/run.py -t cdr_freq_offset_test
 
-# Maximum positive offset (+2000 ppm)
-make run UVM_TEST=cdr_freq_offset_test PLUSARGS="+CDR_FREQ_OFFSET_PPM=2000.0"
+# Build with +1000 ppm offset
+./scripts/build.py -o "+define+CDR_FREQ_OFFSET_PPM=1000.0"
+./scripts/run.py -t cdr_freq_offset_test
 
-# Maximum negative offset (-2000 ppm)
-make run UVM_TEST=cdr_freq_offset_test PLUSARGS="+CDR_FREQ_OFFSET_PPM=-2000.0"
+# Build with maximum positive offset (+2000 ppm)
+./scripts/build.py -o "+define+CDR_FREQ_OFFSET_PPM=2000.0"
+./scripts/run.py -t cdr_freq_offset_test
 
-# Moderate offset (+500 ppm)
-make run UVM_TEST=cdr_freq_offset_test PLUSARGS="+CDR_FREQ_OFFSET_PPM=500.0"
+# Build with maximum negative offset (-2000 ppm)
+./scripts/build.py -o "+define+CDR_FREQ_OFFSET_PPM=-2000.0"
+./scripts/run.py -t cdr_freq_offset_test
 ```
+
+**Note**: The RTL parameter is set at elaboration time, not via runtime plusargs. This ensures the RTL behavior is deterministic and independent of test configuration.
 
 ### Expected Behavior
 

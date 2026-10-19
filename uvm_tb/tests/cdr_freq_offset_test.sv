@@ -8,11 +8,13 @@
 // 2. CDR tracking bandwidth is sufficient to maintain lock
 // 3. PRBS data integrity is maintained even with frequency offset
 //
-// Run with: +CDR_FREQ_OFFSET_PPM=<value> to set the initial frequency offset
-// Example: +CDR_FREQ_OFFSET_PPM=2000.0 tests maximum positive offset
-//          +CDR_FREQ_OFFSET_PPM=-2000.0 tests maximum negative offset
+// The frequency offset is set at compile-time via -DCDR_FREQ_OFFSET_PPM=<value>
+// Example build commands:
+//   build.py -b cdr_test_0ppm                               # 0 ppm (default)
+//   build.py -b cdr_test_2000ppm -D CDR_FREQ_OFFSET_PPM=2000.0   # +2000 ppm
+//   build.py -b cdr_test_n2000ppm -D CDR_FREQ_OFFSET_PPM=-2000.0 # -2000 ppm
 //
-// Without the plusarg, defaults to 0 ppm (backward compatibility check).
+// For randomized testing, the regression script generates random offsets.
 
 class cdr_freq_offset_test extends uvm_test;
 
@@ -21,8 +23,13 @@ class cdr_freq_offset_test extends uvm_test;
   serdesphy_env     env;
   virtual system_if vif;
 
-  // Test parameters
-  real freq_offset_ppm = 0.0;
+  // Test parameters - frequency offset is set at compile time via -DCDR_FREQ_OFFSET_PPM
+`ifndef CDR_FREQ_OFFSET_PPM
+  localparam real freq_offset_ppm = 0.0;
+`else
+  localparam real freq_offset_ppm = `CDR_FREQ_OFFSET_PPM;
+`endif
+
   bit last_got;
 
   function new(string name = "cdr_freq_offset_test", uvm_component parent = null);
@@ -35,16 +42,9 @@ class cdr_freq_offset_test extends uvm_test;
     if (!uvm_config_db#(virtual system_if)::get(this, "", "vif", vif))
       `uvm_fatal("NOVIF", "cdr_freq_offset_test: virtual interface not set via uvm_config_db")
 
-    // Read frequency offset from plusarg (set in project.v)
-    if ($value$plusargs("CDR_FREQ_OFFSET_PPM=%f", freq_offset_ppm)) begin
-      `uvm_info("CDR_FREQ",
-                $sformatf("CDR frequency offset configured: %0.1f ppm", freq_offset_ppm),
-                UVM_MEDIUM)
-    end else begin
-      `uvm_info("CDR_FREQ",
-                "No frequency offset specified - testing nominal (0 ppm) case",
-                UVM_MEDIUM)
-    end
+    `uvm_info("CDR_FREQ",
+              $sformatf("CDR frequency offset set at compile-time: %0.1f ppm", freq_offset_ppm),
+              UVM_MEDIUM)
   endfunction
 
   // Wait for PLL lock with timeout

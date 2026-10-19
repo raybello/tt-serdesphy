@@ -63,7 +63,13 @@ module serdesphy_ana_cdr_vco #(
     localparam real MAX_HALF_PERIOD_NS     = 10.0;   // Sanity limit
 
     reg vco_clk;
-    initial vco_clk = 1'b0;
+
+    initial begin
+        vco_clk = 1'b0;
+        if (FREQ_OFFSET_PPM != 0.0) begin
+            $display("[CDR_VCO] Frequency offset: %0.3f ppm", FREQ_OFFSET_PPM);
+        end
+    end
 
     // Calculate controlled frequency based on control voltage
     // freq = free_run + (control - midscale) * Kvco

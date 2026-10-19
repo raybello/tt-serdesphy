@@ -63,9 +63,16 @@ module system (
   assign vif.txn      = uio_out[3];
 
   // ------------------------------------------------------------------
-  // DUT
+  // DUT - CDR frequency offset controlled via compile-time parameter
   // ------------------------------------------------------------------
-  tt_um_raybello_serdesphy_top dut (
+  // Set via -DCDR_FREQ_OFFSET_PPM=<value> at compile time, or 0.0 default
+`ifndef CDR_FREQ_OFFSET_PPM
+  `define CDR_FREQ_OFFSET_PPM 0.0
+`endif
+
+  tt_um_raybello_serdesphy_top #(
+      .CDR_FREQ_OFFSET_PPM(`CDR_FREQ_OFFSET_PPM)
+  ) dut (
       .ui_in  (ui_in),
       .uo_out (uo_out),
       .uio_in (uio_in),
