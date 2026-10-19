@@ -122,6 +122,7 @@ descrambling etc.
     input       pll_lock_raw,       // Raw PLL lock from analog
     input       pll_vco_ok,         // VCO operating range indicator
     input       pll_cp_ok,          // Charge pump OK indicator
+    input [7:0] pll_vco_control,    // Loop filter output for calibration
 
     // Serializer Interface Status (from PMA)
     input       serializer_ready,   // Serializer ready flag
@@ -218,17 +219,32 @@ descrambling etc.
 
 	// PLL Lock Qualifier - see Finding 2.1: PLL_LOCK/PLL_READY/PLL_ERROR
 	// must depend only on the PLL itself, never on TX_EN/serializer state.
+	// Internal signals for PLL calibration
+	wire [3:0] vco_trim_csr;        // VCO trim from CSR register
+	wire [3:0] vco_trim_calibrated; // Calibrated VCO trim from pll_ctrl
+	wire       pll_cal_done;
+	wire       pll_cal_active;
+
+	// For now, use CSR value directly (calibration disabled via cal_enable=0)
+	assign vco_trim = vco_trim_csr;
+
 	serdesphy_pll_ctrl u_pll_ctrl (
-		.clk_ref_24m  (clk_ref_24m),
-		.rst_n        (digital_reset_n),
-		.phy_en       (phy_en_r),
-		.pll_lock_raw (pll_lock_raw),
-		.pll_vco_ok   (pll_vco_ok),
-		.pll_cp_ok    (pll_cp_ok),
-		.pll_lock     (pll_lock),
-		.pll_ready    (pll_ready),
-		.pll_status   (pll_status),
-		.pll_error    (pll_error)
+		.clk_ref_24m     (clk_ref_24m),
+		.rst_n           (digital_reset_n),
+		.phy_en          (phy_en_r),
+		.csr_vco_trim    (vco_trim_csr),
+		.cal_enable      (1'b0),  // Disabled for now - manual mode via CSR
+		.loop_filter_out (pll_vco_control),
+		.pll_lock_raw    (pll_lock_raw),
+		.pll_vco_ok      (pll_vco_ok),
+		.pll_cp_ok       (pll_cp_ok),
+		.pll_lock        (pll_lock),
+		.pll_ready       (pll_ready),
+		.pll_status      (pll_status),
+		.pll_error       (pll_error),
+		.vco_trim_out    (vco_trim_calibrated),
+		.cal_done        (pll_cal_done),
+		.cal_active      (pll_cal_active)
 	);
 
 
@@ -315,7 +331,7 @@ descrambling etc.
 		.rx_align_rst    (rx_align_rst),
 		.tx_data_sel     (tx_data_sel),
 		.rx_data_sel     (rx_data_sel),
-		.vco_trim        (vco_trim),
+		.vco_trim        (vco_trim_csr),
 		.cp_current      (cp_current),
 		.pll_rst         (pll_rst),
 		.pll_bypass      (pll_bypass),
