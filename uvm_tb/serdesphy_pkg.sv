@@ -98,5 +98,6 @@ package serdesphy_pkg;
   `include "tests/fifo_loopback_test.sv"
   `include "tests/prbs_generator_test.sv"
   `include "tests/prbs_checker_test.sv"
+  `include "tests/cdr_freq_offset_test.sv"
 
 endpackage : serdesphy_pkg

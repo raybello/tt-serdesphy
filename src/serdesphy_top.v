@@ -1,5 +1,9 @@
 
-module serdesphy_top(
+module serdesphy_top #(
+	// CDR VCO frequency offset in ppm (for testing frequency acquisition)
+	// Default 0 = no offset. Set to ±2000 to test spec limits.
+	parameter real CDR_FREQ_OFFSET_PPM = 0.0
+)(
 	// Reset & Clock
 	input 	clk_ref_24m,
 	input 	rst_n,
@@ -343,7 +347,9 @@ module serdesphy_top(
 	);
 
 	// Physical Medium Attachment
-	serdesphy_pma u_pma (
+	serdesphy_pma #(
+		.CDR_FREQ_OFFSET_PPM(CDR_FREQ_OFFSET_PPM)
+	) u_pma (
 		// Clock and Reset
 		.clk_ref_24m        (clk_ref_24m),
 		.rst_n              (rst_n),

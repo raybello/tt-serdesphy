@@ -44,7 +44,19 @@ module tt_um_raybello_serdesphy_top (
   assign uio_out[5] = 1'b0;  // RXN (input)
   assign uio_out[6] = 1'b0;  // LPBK_EN (input)
 
-  serdesphy_top u_top(
+  // CDR frequency offset parameter (controlled via plusarg in simulation)
+  // Default 0 = no offset, set via +CDR_FREQ_OFFSET_PPM=<value>
+  real cdr_freq_offset_ppm = 0.0;
+
+  initial begin
+    if ($value$plusargs("CDR_FREQ_OFFSET_PPM=%f", cdr_freq_offset_ppm)) begin
+      $display("[project.v] CDR VCO frequency offset set to %0.1f ppm", cdr_freq_offset_ppm);
+    end
+  end
+
+  serdesphy_top #(
+    .CDR_FREQ_OFFSET_PPM(cdr_freq_offset_ppm)
+  ) u_top(
     // Reset & Clock
     .clk_ref_24m(ui_in[0]),     // 24 MHz reference clock
     .rst_n      (ui_in[1]),     // Active-low reset
