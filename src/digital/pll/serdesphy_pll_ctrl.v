@@ -38,6 +38,11 @@ module serdesphy_pll_ctrl (
 
     // Control input from CSR
     input  wire       phy_en,          // PHY global enable
+    input  wire [3:0] csr_vco_trim,    // VCO trim from CSR (manual mode)
+    input  wire       cal_enable,      // Enable automatic calibration (default 1'b0 for backward compat)
+
+    // Loop filter status for calibration
+    input  wire [7:0] loop_filter_out, // Loop filter output (default 8'h80 for backward compat)
 
     // Status from analog PLL (PMA)
     input  wire       pll_lock_raw,    // Raw PLL lock from analog
@@ -48,7 +53,12 @@ module serdesphy_pll_ctrl (
     output wire       pll_lock,        // Validated PLL lock
     output wire       pll_ready,       // PLL ready for operation
     output wire [7:0] pll_status,      // Diagnostic status word
-    output wire       pll_error        // PLL error flag (always 0 - see header)
+    output wire       pll_error,       // PLL error flag (always 0 - see header)
+
+    // VCO trim output (calibrated or CSR pass-through)
+    output wire [3:0] vco_trim_out,    // VCO trim to analog PLL
+    output wire       cal_done,        // Calibration complete flag
+    output wire       cal_active       // Calibration in progress
 );
 
     // docs/info.md 4.1 PLL lock time is 8-10us typ/max, and
@@ -137,5 +147,141 @@ module serdesphy_pll_ctrl (
     assign pll_ready  = pll_ready_reg;
     assign pll_error  = 1'b0;
     assign pll_status = {4'b0000, pll_cp_ok, pll_vco_ok, pll_lock_raw, phy_en};
+
+    // =========================================================================
+    // PLL Calibration - Binary Search on VCO Trim
+    // =========================================================================
+
+    // Calibration FSM states
+    localparam [2:0]
+        CAL_IDLE        = 3'b000,
+        CAL_INIT        = 3'b001,
+        CAL_WAIT_SETTLE = 3'b010,
+        CAL_CHECK_LOCK  = 3'b011,
+        CAL_UPDATE      = 3'b100,
+        CAL_DONE        = 3'b101;
+
+    // Calibration timing parameters
+    localparam CAL_SETTLE_CYCLES = 16'd480;    // 20us @ 24MHz for PLL to settle
+    localparam CAL_LOCK_CHECK_CYCLES = 16'd24; // 1us @ 24MHz to confirm lock
+    localparam MAX_CAL_ITERATIONS = 4'd6;      // Max iterations for binary search
+
+    // Loop filter saturation thresholds
+    localparam LOOP_SAT_HIGH = 8'd240;  // Saturated high (VCO too slow)
+    localparam LOOP_SAT_LOW  = 8'd15;   // Saturated low (VCO too fast)
+
+    // Calibration registers
+    reg [2:0]  cal_state;
+    reg [3:0]  vco_trim_cal;
+    reg [3:0]  search_min;
+    reg [3:0]  search_max;
+    reg [15:0] cal_timer;
+    reg        cal_done_reg;
+    reg [3:0]  cal_iteration;
+
+    // Calibration FSM
+    always @(posedge clk_ref_24m or negedge rst_n) begin
+        if (!rst_n) begin
+            cal_state     <= CAL_IDLE;
+            vco_trim_cal  <= 4'h8;  // Start at mid-range
+            search_min    <= 4'h0;
+            search_max    <= 4'hF;
+            cal_timer     <= 16'd0;
+            cal_done_reg  <= 1'b0;
+            cal_iteration <= 4'd0;
+        end else begin
+            case (cal_state)
+                CAL_IDLE: begin
+                    if (cal_enable && phy_en && !cal_done_reg) begin
+                        // Start calibration
+                        cal_state     <= CAL_INIT;
+                        search_min    <= 4'h0;
+                        search_max    <= 4'hF;
+                        cal_iteration <= 4'd0;
+                        cal_done_reg  <= 1'b0;
+                    end else if (!cal_enable) begin
+                        // Pass through CSR value in manual mode
+                        vco_trim_cal <= csr_vco_trim;
+                        cal_done_reg <= 1'b0;
+                    end
+                end
+
+                CAL_INIT: begin
+                    // Calculate and apply midpoint
+                    vco_trim_cal <= (search_min + search_max) >> 1;
+                    cal_timer    <= 16'd0;
+                    cal_state    <= CAL_WAIT_SETTLE;
+                end
+
+                CAL_WAIT_SETTLE: begin
+                    // Wait for PLL to settle with new vco_trim
+                    if (cal_timer < CAL_SETTLE_CYCLES) begin
+                        cal_timer <= cal_timer + 1;
+                    end else begin
+                        cal_timer <= 16'd0;
+                        cal_state <= CAL_CHECK_LOCK;
+                    end
+                end
+
+                CAL_CHECK_LOCK: begin
+                    // Check if PLL achieved lock
+                    if (pll_lock_reg) begin
+                        // Locked! Calibration successful
+                        cal_state    <= CAL_DONE;
+                        cal_done_reg <= 1'b1;
+                    end else if (cal_timer < CAL_LOCK_CHECK_CYCLES) begin
+                        cal_timer <= cal_timer + 1;
+                    end else begin
+                        cal_state <= CAL_UPDATE;
+                    end
+                end
+
+                CAL_UPDATE: begin
+                    cal_iteration <= cal_iteration + 1;
+
+                    // Check if converged or max iterations reached
+                    if ((search_max <= search_min + 1) ||
+                        (cal_iteration >= MAX_CAL_ITERATIONS)) begin
+                        // Done - use current value
+                        cal_state    <= CAL_DONE;
+                        cal_done_reg <= 1'b1;
+                    end else begin
+                        // Determine search direction based on loop filter
+                        if (loop_filter_out > LOOP_SAT_HIGH) begin
+                            // Loop filter saturated high -> VCO too slow
+                            // Need higher frequency -> increase vco_trim
+                            search_min <= vco_trim_cal + 1;
+                        end else if (loop_filter_out < LOOP_SAT_LOW) begin
+                            // Loop filter saturated low -> VCO too fast
+                            // Need lower frequency -> decrease vco_trim
+                            search_max <= vco_trim_cal - 1;
+                        end else begin
+                            // Loop filter in middle range but no lock
+                            // Try higher frequency
+                            search_min <= vco_trim_cal + 1;
+                        end
+                        cal_state <= CAL_INIT;
+                    end
+                end
+
+                CAL_DONE: begin
+                    // Hold calibration result
+                    cal_done_reg <= 1'b1;
+                    if (!cal_enable || !phy_en) begin
+                        cal_state <= CAL_IDLE;
+                    end
+                end
+
+                default: begin
+                    cal_state <= CAL_IDLE;
+                end
+            endcase
+        end
+    end
+
+    // Output assignments for calibration
+    assign vco_trim_out = cal_enable ? vco_trim_cal : csr_vco_trim;
+    assign cal_done     = cal_done_reg;
+    assign cal_active   = (cal_state != CAL_IDLE) && (cal_state != CAL_DONE);
 
 endmodule
