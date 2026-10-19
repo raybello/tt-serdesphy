@@ -5,7 +5,11 @@
 
 `default_nettype none
 
-module tt_um_raybello_serdesphy_top (
+module tt_um_raybello_serdesphy_top #(
+    // CDR frequency offset in ppm for testing frequency acquisition
+    // Default 0 = no offset. Override in testbench for offset testing.
+    parameter real CDR_FREQ_OFFSET_PPM = 0.0
+)(
     input  wire [7:0] ui_in,    // Dedicated inputs
     output wire [7:0] uo_out,   // Dedicated outputs
     input  wire [7:0] uio_in,   // IOs: Input path
@@ -44,7 +48,9 @@ module tt_um_raybello_serdesphy_top (
   assign uio_out[5] = 1'b0;  // RXN (input)
   assign uio_out[6] = 1'b0;  // LPBK_EN (input)
 
-  serdesphy_top u_top(
+  serdesphy_top #(
+    .CDR_FREQ_OFFSET_PPM(CDR_FREQ_OFFSET_PPM)
+  ) u_top(
     // Reset & Clock
     .clk_ref_24m(ui_in[0]),     // 24 MHz reference clock
     .rst_n      (ui_in[1]),     // Active-low reset

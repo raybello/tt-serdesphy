@@ -4,7 +4,12 @@
  * Integrates PLL, CDR, Serializer, Deserializer, and differential I/O
  */
 
-module serdesphy_pma(
+module serdesphy_pma #(
+    // CDR VCO frequency offset in ppm (for testing frequency acquisition)
+    // Positive = CDR VCO runs faster than TX PLL, negative = slower
+    // Spec requires ±2000 ppm acquisition range
+    parameter real CDR_FREQ_OFFSET_PPM = 0.0
+)(
     // Clock and Reset
     input  wire       clk_ref_24m,        // 24 MHz reference clock
     input  wire       rst_n,              // Global reset (active-low)
@@ -209,8 +214,10 @@ module serdesphy_pma(
         .phase_detector ()  // Not connected - internal debug
     );
 
-    // CDR VCO - Generates recovered clock
-    serdesphy_ana_cdr_vco u_cdr_vco (
+    // CDR VCO - Generates recovered clock with configurable frequency offset
+    serdesphy_ana_cdr_vco #(
+        .FREQ_OFFSET_PPM(CDR_FREQ_OFFSET_PPM)
+    ) u_cdr_vco (
         .rst_n          (rst_n && analog_reset_n),
         .enable         (deserializer_enable && analog_en),
         .cdr_control    (cdr_vco_control),
