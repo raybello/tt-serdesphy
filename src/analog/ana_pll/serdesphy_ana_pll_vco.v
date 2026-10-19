@@ -1,7 +1,7 @@
 /*
  * SerDes PHY PLL VCO
  * Synthesis: constant-0 placeholder (replaced by analog ring oscillator in silicon).
- * Simulation: behavioral 240 MHz oscillator with frequency control modeling.
+ * Simulation: behavioral oscillator with frequency control modeling.
  *
  * vco_control[7:0] structure:
  *   [7:4] - Coarse tuning (from vco_trim register)
@@ -20,72 +20,76 @@ module serdesphy_ana_pll_vco (
     input  wire       rst_n,
     input  wire       enable,
     input  wire [7:0] vco_control,
-    output wire       vco_out,
+    output reg        vco_out,
     output wire       vco_ready
 );
 
 `ifndef SYNTHESIS
     // Simulation-only behavioral oscillator with frequency modeling
 
-    // Frequency calculation parameters
-    // Nominal frequency: 240 MHz (period = 4.166 ns, half-period = 2.083 ns)
     localparam real NOMINAL_FREQ_MHZ = 240.0;
-    localparam real NOMINAL_CONTROL = 128.0;  // Mid-range of 8-bit control
+    localparam real COARSE_STEP_MHZ = 5.0;
+    localparam real FINE_STEP_MHZ = 0.3125;
 
-    // Tuning ranges
-    localparam real COARSE_STEP_MHZ = 5.0;    // 5 MHz per coarse bit
-    localparam real FINE_STEP_MHZ = 0.3125;   // 312.5 kHz per fine bit
-
-    reg vco_clk;
-    real current_freq_mhz;
     real current_half_period_ns;
-    integer coarse_control;
-    integer fine_control;
-    real coarse_offset_mhz;
-    real fine_offset_mhz;
+    event vco_restart;
+    integer last_vco_control;
 
-    initial vco_clk = 1'b0;
-
-    // Calculate frequency based on control inputs
-    always @(*) begin
-        // Extract coarse and fine controls
-        coarse_control = vco_control[7:4];
-        fine_control = vco_control[3:0];
-
-        // Calculate frequency offsets from nominal
-        // Coarse: centered around 8 (0-15 range)
-        coarse_offset_mhz = (coarse_control - 8) * COARSE_STEP_MHZ;
-
-        // Fine: centered around 8 (0-15 range)
-        fine_offset_mhz = (fine_control - 8) * FINE_STEP_MHZ;
-
-        // Total frequency
-        current_freq_mhz = NOMINAL_FREQ_MHZ + coarse_offset_mhz + fine_offset_mhz;
-
-        // Convert to half-period in ns
-        // Half-period = 1 / (2 * freq_MHz * 1e-3)
-        if (current_freq_mhz > 0)
-            current_half_period_ns = 500.0 / current_freq_mhz;
-        else
-            current_half_period_ns = 2.083; // Default to nominal
+    initial begin
+        vco_out = 1'b0;
+        last_vco_control = 0;
     end
 
-    // VCO oscillation with variable frequency
-    always begin
-        if (enable && rst_n) begin
-            #(current_half_period_ns * 1ns) vco_clk = ~vco_clk;
-        end else begin
-            vco_clk = 1'b0;
-            @(posedge enable or posedge rst_n);
+    // Calculate half-period from vco_control
+    function real calc_half_period;
+        input [7:0] ctrl;
+        integer coarse, fine;
+        real freq;
+        begin
+            coarse = ctrl[7:4];
+            fine = ctrl[3:0];
+            freq = NOMINAL_FREQ_MHZ + (coarse - 8) * COARSE_STEP_MHZ + (fine - 8) * FINE_STEP_MHZ;
+            calc_half_period = (freq > 0) ? (500.0 / freq) : 2.083;
+        end
+    endfunction
+
+    // Detect vco_control changes and restart oscillator
+    always @(vco_control) begin
+        if (vco_control !== last_vco_control) begin
+            last_vco_control = vco_control;
+            $display("[VCO] @ %0t ns: vco_control changed to 0x%0h (coarse=%0d, fine=%0d) freq=%0.2f MHz",
+                     $realtime/1000.0, vco_control, vco_control[7:4], vco_control[3:0],
+                     NOMINAL_FREQ_MHZ + (vco_control[7:4] - 8) * COARSE_STEP_MHZ + (vco_control[3:0] - 8) * FINE_STEP_MHZ);
+            -> vco_restart;  // Trigger restart
         end
     end
 
-    assign vco_out = (enable && rst_n) ? vco_clk : 1'b0;
+    // Main oscillator - restarts with new frequency on control change
+    always @(vco_restart or posedge enable or negedge rst_n) begin
+        vco_out = 1'b0;  // Reset output on restart
+        current_half_period_ns = calc_half_period(vco_control);
+
+        while (enable && rst_n) begin
+            // Check if control changed during delay
+            current_half_period_ns = calc_half_period(vco_control);
+            #(current_half_period_ns * 1ns);
+            if (enable && rst_n)  // Check again after delay
+                vco_out = ~vco_out;
+            else
+                break;
+        end
+
+        if (!enable || !rst_n)
+            vco_out = 1'b0;
+    end
+
 `else
-    // Synthesis placeholder: no oscillation (replaced by analog in tapeout)
+    // Synthesis placeholder
     assign vco_out = 1'b0;
 `endif
 
     assign vco_ready = rst_n & enable;
 
 endmodule
+
+`default_nettype wire
