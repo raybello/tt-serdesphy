@@ -72,13 +72,20 @@ module serdesphy_ana_cdr (
     // transition at every bit's own midpoint, so a locked, active link
     // should see transitions on a healthy fraction of cycles; silence
     // should not.
-    localparam [8:0]        BALANCE_WINDOW    = 9'd256;
-    localparam signed [8:0] BALANCE_THRESHOLD = 9'sd32;
-    localparam [8:0]        MIN_ACTIVITY      = 9'd24;
+    //
+    // CONSECUTIVE_WINDOWS: With frequency offset, a single balanced window
+    // can occur while the VCO control is still ramping toward the correct
+    // frequency. Requiring multiple consecutive balanced windows ensures
+    // the frequency has truly converged before declaring lock.
+    localparam [8:0]        BALANCE_WINDOW       = 9'd256;
+    localparam signed [8:0] BALANCE_THRESHOLD    = 9'sd32;
+    localparam [8:0]        MIN_ACTIVITY         = 9'd24;
+    localparam [2:0]        CONSECUTIVE_WINDOWS  = 3'd3;  // Require 3 consecutive balanced windows
 
     reg signed [8:0] balance_accum;
     reg [8:0]        activity_count;
     reg [8:0]        window_count;
+    reg [2:0]        consecutive_balanced;  // Count of consecutive balanced windows
 
     // Signed phase-error deviation from mid-scale (8'h80), used by the
     // gain-scaled tracking corrections below. phase_detector_reg is an
@@ -148,6 +155,7 @@ module serdesphy_ana_cdr (
             balance_accum <= 9'sh000;
             activity_count <= 9'h000;
             window_count <= 9'h000;
+            consecutive_balanced <= 3'd0;
         end else if (cdr_rst || !enable) begin
             cdr_state <= STATE_RESET;
             cdr_lock_reg <= 0;
@@ -155,6 +163,7 @@ module serdesphy_ana_cdr (
             balance_accum <= 9'sh000;
             activity_count <= 9'h000;
             window_count <= 9'h000;
+            consecutive_balanced <= 3'd0;
         end else begin
             case (cdr_state)
                 STATE_RESET: begin
@@ -164,6 +173,7 @@ module serdesphy_ana_cdr (
                     balance_accum <= 9'sh000;
                     activity_count <= 9'h000;
                     window_count <= 9'h000;
+                    consecutive_balanced <= 3'd0;
                 end
 
                 STATE_ACQUIRE: begin
@@ -185,15 +195,46 @@ module serdesphy_ana_cdr (
                     // accumulator means this window's corrections roughly
                     // canceled out, i.e. the VCO has settled near the
                     // incoming data's phase rather than still converging.
+                    //
+                    // With frequency offset, require CONSECUTIVE_WINDOWS
+                    // balanced windows to ensure frequency has converged.
                     if (window_count >= BALANCE_WINDOW - 1'b1) begin
                         window_count   <= 9'h000;
                         balance_accum  <= 9'sh000;
                         activity_count <= 9'h000;
+
+                        // Check if this window was balanced
                         if ((balance_accum >= -BALANCE_THRESHOLD) &&
                             (balance_accum <= BALANCE_THRESHOLD) &&
                             (activity_count >= MIN_ACTIVITY)) begin
-                            cdr_state    <= STATE_LOCKED;
-                            cdr_lock_reg <= 1;
+                            // Balanced window - increment consecutive counter
+                            if (consecutive_balanced < CONSECUTIVE_WINDOWS) begin
+                                consecutive_balanced <= consecutive_balanced + 1'b1;
+                                `ifndef SYNTHESIS
+                                $display("[CDR @%0t] Balanced window %0d/%0d (balance=%0d, activity=%0d, vco_ctrl=%0d)",
+                                         $time, consecutive_balanced + 1'b1, CONSECUTIVE_WINDOWS,
+                                         balance_accum, activity_count, vco_control_reg);
+                                `endif
+                            end
+
+                            // Declare lock only after CONSECUTIVE_WINDOWS balanced windows
+                            if (consecutive_balanced >= (CONSECUTIVE_WINDOWS - 1'b1)) begin
+                                cdr_state    <= STATE_LOCKED;
+                                cdr_lock_reg <= 1;
+                                `ifndef SYNTHESIS
+                                $display("[CDR @%0t] LOCK DECLARED after %0d consecutive balanced windows (vco_ctrl=%0d)",
+                                         $time, CONSECUTIVE_WINDOWS, vco_control_reg);
+                                `endif
+                            end
+                        end else begin
+                            // Unbalanced window - reset consecutive counter
+                            `ifndef SYNTHESIS
+                            if (consecutive_balanced > 0) begin
+                                $display("[CDR @%0t] Unbalanced window - resetting counter (was %0d, balance=%0d, activity=%0d)",
+                                         $time, consecutive_balanced, balance_accum, activity_count);
+                            end
+                            `endif
+                            consecutive_balanced <= 3'd0;
                         end
                     end else begin
                         window_count <= window_count + 1'b1;
