@@ -76,15 +76,15 @@ module serdesphy_ana_pll (
         .vco_control     (loop_filter_out)
     );
     
-    // VCO control combining coarse (vco_trim) and fine (loop filter)
-    wire [7:0] vco_control_combined;
-    assign vco_control_combined = {vco_trim, loop_filter_out[3:0]};  // Coarse[7:4], Fine[3:0]
+    // VCO control: pass loop filter and vco_trim separately to VCO
+    // VCO will combine them in its frequency calculation
 
     // VCO
     serdesphy_ana_pll_vco u_vco (
         .rst_n          (rst_n),
         .enable         (enable && !pll_bypass),
-        .vco_control    (vco_control_combined),
+        .vco_control    (loop_filter_out),  // Full 8-bit loop filter output
+        .vco_trim       (vco_trim),         // Coarse tuning offset
         .vco_out        (vco_out),
         .vco_ready      (vco_ready)
     );
@@ -124,7 +124,7 @@ module serdesphy_ana_pll (
                 STATE_ACQUIRE: begin
                     pll_lock_reg <= 0;
                     lock_counter <= lock_counter + 1;
-                    
+
                     // Check for lock after sufficient time
                     if (lock_counter >= 10'd240) begin  // ~10us at 24MHz
                         pll_state <= STATE_TRACK;
