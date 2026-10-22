@@ -225,15 +225,16 @@ descrambling etc.
 	wire       pll_cal_done;
 	wire       pll_cal_active;
 
-	// For now, use CSR value directly (calibration disabled via cal_enable=0)
-	assign vco_trim = vco_trim_csr;
+	// Use calibrated VCO trim value (automatic binary search)
+	// pll_ctrl performs binary search on vco_trim until PLL locks
+	assign vco_trim = vco_trim_calibrated;
 
 	serdesphy_pll_ctrl u_pll_ctrl (
 		.clk_ref_24m     (clk_ref_24m),
 		.rst_n           (digital_reset_n),
 		.phy_en          (phy_en_r),
-		.csr_vco_trim    (vco_trim_csr),
-		.cal_enable      (1'b0),  // Disabled for now - manual mode via CSR
+		.csr_vco_trim    (vco_trim_csr),  // Initial value/manual override (if cal disabled via future CSR)
+		.cal_enable      (1'b1),           // Enable automatic calibration
 		.loop_filter_out (pll_vco_control),
 		.pll_lock_raw    (pll_lock_raw),
 		.pll_vco_ok      (pll_vco_ok),
