@@ -39,7 +39,15 @@ module serdesphy_ana_pll (
     reg        pll_lock_reg;
     reg [9:0]  lock_counter;
     reg [1:0]  pll_state;
-    
+    reg [7:0]  prev_loop_filter;
+    reg [3:0]  stable_count;
+    wire       loop_stable;
+
+    // Detect loop filter stability (convergence indicator)
+    // Stable when loop filter changes by <= 2 codes between samples
+    assign loop_stable = (loop_filter_out >= prev_loop_filter - 2) &&
+                         (loop_filter_out <= prev_loop_filter + 2);
+
     // State encoding
     localparam STATE_RESET    = 2'b00;
     localparam STATE_ACQUIRE  = 2'b01;
@@ -107,27 +115,50 @@ module serdesphy_ana_pll (
             pll_state <= STATE_RESET;
             pll_lock_reg <= 0;
             lock_counter <= 10'h000;
+            prev_loop_filter <= 8'h00;
+            stable_count <= 4'h0;
         end else if (pll_rst || !enable || pll_bypass) begin
             pll_state <= STATE_RESET;
             pll_lock_reg <= 0;
             lock_counter <= 10'h000;
+            prev_loop_filter <= 8'h00;
+            stable_count <= 4'h0;
         end else begin
             case (pll_state)
                 STATE_RESET: begin
                     pll_lock_reg <= 0;
                     lock_counter <= 10'h000;
+                    prev_loop_filter <= 8'h00;
+                    stable_count <= 4'h0;
                     if (vco_ready) begin
                         pll_state <= STATE_ACQUIRE;
                     end
                 end
-                
+
                 STATE_ACQUIRE: begin
                     pll_lock_reg <= 0;
                     lock_counter <= lock_counter + 1;
+                    prev_loop_filter <= loop_filter_out;
 
-                    // Check for lock after sufficient time
-                    if (lock_counter >= 10'd240) begin  // ~10us at 24MHz
-                        pll_state <= STATE_TRACK;
+                    // Check for lock based on loop filter stability
+                    // Need minimum time (48 cycles = 2us) AND stable loop filter
+                    if (lock_counter >= 10'd48) begin
+                        if (loop_stable) begin
+                            if (stable_count >= 4'd8) begin
+                                // Stable for 8 consecutive cycles - locked!
+                                pll_state <= STATE_TRACK;
+                            end else begin
+                                stable_count <= stable_count + 1;
+                            end
+                        end else begin
+                            // Not stable, reset counter
+                            stable_count <= 4'h0;
+                        end
+                    end
+
+                    // Timeout after 30us if still not stable
+                    if (lock_counter >= 10'd720) begin
+                        pll_state <= STATE_TRACK;  // Give up and declare lock anyway
                     end
                 end
                 

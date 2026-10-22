@@ -40,17 +40,21 @@ module serdesphy_ana_frequency_divider (
         end
     end
     
-    // Generate output pulse on terminal count
-    // Simple 50% duty cycle: high for counts 0-4, low for 5-9
+    // Generate divided clock with 50% duty cycle (registered to avoid glitches)
     reg clk_out_reg;
-    always @(*) begin
-        if (!enable) begin
-            clk_out_reg = 1'b0;
+    always @(posedge clk_in or negedge rst_n) begin
+        if (!rst_n) begin
+            clk_out_reg <= 1'b0;
+        end else if (!enable) begin
+            clk_out_reg <= 1'b0;
         end else begin
-            clk_out_reg = (counter < 4'h5);  // 50% duty cycle
+            // Toggle on terminal count for 50% duty cycle
+            if (counter == 4'h9 || counter == 4'h4) begin
+                clk_out_reg <= ~clk_out_reg;
+            end
         end
     end
-    
+
     // Output assignments
     assign clk_out = clk_out_reg;
     assign clk_divided = clk_divided_reg;

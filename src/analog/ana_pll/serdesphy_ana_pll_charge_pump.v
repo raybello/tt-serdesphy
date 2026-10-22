@@ -23,12 +23,47 @@ module serdesphy_ana_pll_charge_pump (
     output wire       charge_out       // Charge pump output
 );
 
-    // Placeholder: output directly driven
-    // In production, charge_out will reflect pump up/down activity
-    // For now, tie to 0 (no charge pump activity)
-    assign charge_out = 1'b0;
+    // Behavioral charge pump model
+    // Output 1 for UP (increase VCO freq), 0 for DOWN (decrease VCO freq)
+    reg charge_out_reg;
 
-    // Unused inputs - prevent lint warnings
-    wire _unused = &{clk, rst_n, enable, cp_current, up_pulse, down_pulse};
+    reg [7:0] up_count, down_count;
+    reg debug_printed;
+
+    always @(posedge clk or negedge rst_n) begin
+        if (!rst_n) begin
+            charge_out_reg <= 1'b0;
+            up_count <= 8'h0;
+            down_count <= 8'h0;
+            debug_printed <= 1'b0;
+        end else if (!enable) begin
+            charge_out_reg <= 1'b0;
+            up_count <= 8'h0;
+            down_count <= 8'h0;
+            debug_printed <= 1'b0;
+        end else begin
+            // UP pulse takes priority (if both asserted, favor UP)
+            if (up_pulse) begin
+                charge_out_reg <= 1'b1;  // Drive loop filter UP
+                up_count <= (up_count < 255) ? up_count + 1 : 255;
+            end else if (down_pulse) begin
+                charge_out_reg <= 1'b0;  // Drive loop filter DOWN
+                down_count <= (down_count < 255) ? down_count + 1 : 255;
+            end
+            // If neither, hold previous value
+
+            // Print debug after 100 cycles
+            if ((up_count + down_count >= 100) && !debug_printed) begin
+                $display("[CP] @ %0.3f us: UP=%0d DOWN=%0d (after 100 pulses)",
+                         $realtime/1000000.0, up_count, down_count);
+                debug_printed <= 1'b1;
+            end
+        end
+    end
+
+    assign charge_out = charge_out_reg;
+
+    // Unused input
+    wire _unused = &{cp_current};
 
 endmodule
