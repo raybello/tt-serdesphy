@@ -71,6 +71,13 @@ module serdesphy_pll_ctrl (
     localparam LOCK_COUNT_MAX = 16'd4;     // ~167ns extra debounce @ 24MHz
     localparam UNLOCK_COUNT   = 16'd240;   // 10us before unlock declaration
 
+    // Loop filter frequency lock range - for 200ppm jitter spec
+    // Loop filter centered at 128 indicates zero frequency error
+    // Tight range around center ensures frequency within spec
+    // ±16 from center = ±5 MHz = ±2% of 240 MHz (tighter than ±17% with full range)
+    localparam LOOP_LOCK_MIN = 8'd112;  // 128 - 16
+    localparam LOOP_LOCK_MAX = 8'd144;  // 128 + 16
+
     localparam [1:0]
         LOCK_STATE_UNLOCKED  = 2'b00,
         LOCK_STATE_ACQUIRING = 2'b01,
@@ -82,7 +89,11 @@ module serdesphy_pll_ctrl (
     reg        pll_lock_reg;
     reg        pll_ready_reg;
 
-    wire pll_healthy = phy_en && pll_lock_raw && pll_vco_ok && pll_cp_ok;
+    // PLL is healthy when loop filter is in lock range (not saturated)
+    // This ensures frequency is within 200ppm spec before declaring lock
+    wire loop_in_range = (loop_filter_out >= LOOP_LOCK_MIN) &&
+                         (loop_filter_out <= LOOP_LOCK_MAX);
+    wire pll_healthy = phy_en && pll_lock_raw && pll_vco_ok && pll_cp_ok && loop_in_range;
 
     always @(posedge clk_ref_24m or negedge rst_n) begin
         if (!rst_n) begin
@@ -166,9 +177,11 @@ module serdesphy_pll_ctrl (
     localparam CAL_LOCK_CHECK_CYCLES = 16'd24; // 1us @ 24MHz to confirm lock
     localparam MAX_CAL_ITERATIONS = 4'd6;      // Max iterations for binary search
 
-    // Loop filter saturation thresholds
-    localparam LOOP_SAT_HIGH = 8'd240;  // Saturated high (VCO too slow)
-    localparam LOOP_SAT_LOW  = 8'd15;   // Saturated low (VCO too fast)
+    // Loop filter saturation thresholds for calibration
+    // Use same thresholds as lock detection to ensure proper frequency
+    // If loop filter is outside [112:144], VCO trim needs adjustment
+    localparam LOOP_SAT_HIGH = 8'd160;  // Above this: VCO too slow, need higher trim
+    localparam LOOP_SAT_LOW  = 8'd96;   // Below this: VCO too fast, need lower trim
 
     // Calibration registers
     reg [2:0]  cal_state;
@@ -248,19 +261,25 @@ module serdesphy_pll_ctrl (
                         cal_state    <= CAL_DONE;
                         cal_done_reg <= 1'b1;
                     end else begin
-                        // Determine search direction based on loop filter
+                        // Determine search direction based on loop filter position
+                        // For 200ppm lock requirement, we need loop filter near 128
+
                         if (loop_filter_out > LOOP_SAT_HIGH) begin
-                            // Loop filter saturated high -> VCO too slow
+                            // Loop filter saturated high (>160) -> VCO too slow
                             // Need higher frequency -> increase vco_trim
                             search_min <= vco_trim_cal + 1;
                         end else if (loop_filter_out < LOOP_SAT_LOW) begin
-                            // Loop filter saturated low -> VCO too fast
+                            // Loop filter saturated low (<96) -> VCO too fast
                             // Need lower frequency -> decrease vco_trim
                             search_max <= vco_trim_cal - 1;
-                        end else begin
-                            // Loop filter in middle range but no lock
-                            // Try higher frequency
+                        end else if (loop_filter_out > 8'd128) begin
+                            // Loop filter above center (128-160) -> VCO slightly slow
+                            // Need higher frequency -> increase vco_trim
                             search_min <= vco_trim_cal + 1;
+                        end else begin
+                            // Loop filter below center (96-128) -> VCO slightly fast
+                            // Need lower frequency -> decrease vco_trim
+                            search_max <= vco_trim_cal - 1;
                         end
                         cal_state <= CAL_INIT;
                     end
