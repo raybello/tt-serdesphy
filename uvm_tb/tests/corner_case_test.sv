@@ -60,6 +60,10 @@ class corner_case_test extends uvm_test;
     init_seq = system_init_vseq::type_id::create("init_seq");
     init_seq.start(env.vseqr);
 
+    // csr_init_vseq leaves PLL_RST asserted so tests can program VCO_TRIM.
+    // Release it so the PLL is actually running for the enable/disable tests.
+    env.regmodel.set_pll_reset(1'b0, null);
+
     // CC_003/004: rapid back-to-back register writes and reads across
     // every RW register, no idle time between transactions - the I2C
     // slave's debounce/start-stop detection must keep up without

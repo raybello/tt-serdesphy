@@ -83,6 +83,9 @@ class prbs_generator_test extends uvm_test;
     init_seq = system_init_vseq::type_id::create("init_seq");
     init_seq.start(env.vseqr);
 
+    // Release PLL reset; csr_init_vseq leaves it asserted for VCO_TRIM setup.
+    env.regmodel.set_pll_reset(1'b0, null);
+
     wait_pll_lock(50_000);
     if (!last_got) begin
       `uvm_error("PRBS_GEN", "PLL_LOCK did not assert - cannot proceed")

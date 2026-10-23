@@ -40,6 +40,14 @@ class tx_fifo_test extends uvm_test;
     init_seq = system_init_vseq::type_id::create("init_seq");
     init_seq.start(env.vseqr);
 
+    // The TX serializer/driver is clocked from the PLL. csr_init_vseq leaves
+    // PLL_RST asserted so tests can program VCO_TRIM first; release it here so
+    // the TX output stage has a clock before checking idle levels.
+    env.regmodel.set_pll_reset(1'b0, null);
+    #(20us);
+    if (!vif.pll_lock)
+      `uvm_error("TX_FIFO", "PLL did not lock; TX serializer has no clock")
+
     // TX_003: FIFO depth = 8 words. TX_005: full flag at 7... datasheet
     // wording aside (see docs/implementation/01-spec-vs-implementation.md
     // "TX FIFO full threshold" note), the RTL's full flag asserts at

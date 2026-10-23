@@ -19,6 +19,7 @@ package serdesphy_pkg;
   // Configs
   // ------------------------------------------------------------------
   `include "env/configs/config_base.sv"
+  `include "env/configs/pll_cfg.sv"
   `include "env/configs/clk_reset/clk_reset_base_cfg.sv"
   `include "env/configs/clk_reset/clk_reset_full_cfg.sv"
 
@@ -93,6 +94,7 @@ package serdesphy_pkg;
   `include "tests/init_sequence_test.sv"
   `include "tests/tx_fifo_test.sv"
   `include "tests/pll_lock_test.sv"
+  `include "tests/pll_calibration_test.sv"
   `include "tests/test_mode_test.sv"
   `include "tests/corner_case_test.sv"
   `include "tests/fifo_loopback_test.sv"

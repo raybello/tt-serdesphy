@@ -138,6 +138,7 @@ module serdesphy_top #(
 	wire pll_lock_raw;
 	wire pll_vco_ok;
 	wire pll_cp_ok;
+	wire [7:0] pll_vco_control;
 
 	// PMA clock outputs
 	wire clk_240m_pll;
@@ -162,7 +163,9 @@ module serdesphy_top #(
 	// =========================================================================
 
 	// PCS Internal Logic - Generate PMA control signals
-	assign pll_enable = phy_en && !iso_en;
+	// PLL enable requires: PHY enabled, not isolated, AND not in reset
+	// This prevents PLL from auto-starting during init before SW configures VCO trim
+	assign pll_enable = phy_en && !iso_en && !pll_rst;
 	assign pll_reset_n = digital_reset_n && !pll_rst;
 	assign pll_bypass_en = pll_bypass;
 	assign pll_iso_n = analog_iso_n;
@@ -292,6 +295,7 @@ module serdesphy_top #(
 		.pll_lock_raw       (pll_lock_raw),
 		.pll_vco_ok         (pll_vco_ok),
 		.pll_cp_ok          (pll_cp_ok),
+		.pll_vco_control    (pll_vco_control),
 
 		// PLL Status
 		.pll_lock           (pll_lock),
@@ -373,6 +377,7 @@ module serdesphy_top #(
 		.pll_lock_raw       (pll_lock_raw),
 		.pll_vco_ok         (pll_vco_ok),
 		.pll_cp_ok          (pll_cp_ok),
+		.pll_vco_control_out(pll_vco_control),
 
 		// PMA Clock Outputs
 		.clk_240m_pll       (clk_240m_pll),

@@ -92,6 +92,13 @@ class fifo_loopback_test extends uvm_test;
     init_seq = system_init_vseq::type_id::create("init_seq");
     init_seq.start(env.vseqr);
 
+    // Release PLL reset and let calibration finish so the TX serializer has a
+    // clock before loopback traffic starts.
+    env.regmodel.set_pll_reset(1'b0, null);
+    #(20us);
+    if (!vif.pll_lock)
+      `uvm_error("FIFO_LB", "PLL_LOCK did not assert before FIFO loopback traffic")
+
     // DATA_SELECT: TX_DATA_SEL=1 (FIFO), RX_DATA_SEL=0 (FIFO) - set once,
     // never switched mid-test.
     env.regmodel.write_reg_by_addr(system_pkg::REG_DATA_SELECT, 8'h01, null);

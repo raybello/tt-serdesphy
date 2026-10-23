@@ -28,7 +28,9 @@ class csr_init_vseq extends base_vseq;
   task body();
     regmodel.enable_phy(1'b1, this);
     regmodel.set_isolation(1'b0, this);
-    regmodel.set_pll_reset(1'b0, this);
+    // NOTE: pll_rst stays at default=1 (PLL held disabled)
+    // Tests must explicitly clear pll_rst to enable PLL and start calibration
+    // This prevents auto-calibration during init before SW can configure VCO trim
     regmodel.set_cdr_reset(1'b0, this);
   endtask : body
 

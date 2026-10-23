@@ -1,5 +1,17 @@
 from src.env import *
 from cocotb.triggers import RisingEdge
+import os
+
+
+# Gate-level builds replace the analog PLL/CDR with hard macros that are not
+# part of the synthesized netlist, so the 240 MHz serializer/recovered clocks
+# are not available. Tests that require those analog blocks are skipped here;
+# the digital CSR test still runs.
+def skip_in_gate_level(dut, test_name):
+    if os.environ.get("GL_TEST") == "1":
+        dut._log.info(f"GL_TEST: skipping {test_name} (analog PLL/CDR not in gate netlist)")
+        return True
+    return False
 
 
 # ============================================================================
@@ -34,6 +46,8 @@ async def base_setup(dut):
 @cocotb.test()
 async def power_up(dut):
     """Verify POR completes and PLL asserts lock after reset."""
+    if skip_in_gate_level(dut, "power_up"):
+        return
     dut._log.info("=== Power-Up Test ===")
 
     phy = await base_setup(dut)
@@ -70,6 +84,8 @@ async def power_up(dut):
 @cocotb.test()
 async def power_up_with_configuration(dut):
     """Verify I2C register writes are reflected in readback and PLL locks."""
+    if skip_in_gate_level(dut, "power_up_with_configuration"):
+        return
     dut._log.info("=== Power-Up + Configuration Test ===")
 
     phy = await base_setup(dut)
@@ -87,8 +103,8 @@ async def power_up_with_configuration(dut):
         RegisterMap.PHY_ENABLE: 0x01,   # PHY_EN=1, ISO_EN=0
         RegisterMap.TX_CONFIG:  0x01,   # TX_EN only
         RegisterMap.RX_CONFIG:  0x01,   # RX_EN only
-        RegisterMap.PLL_CONFIG: 0x08,   # vco_trim=8, rst=0  (configure_pll bit layout)
-        RegisterMap.CDR_CONFIG: 0x04,   # gain=4, rst=0  (configure_cdr bit layout)
+        RegisterMap.PLL_CONFIG: 0x28,   # bypass=0, rst=0, cp_current=2, vco_trim=8
+        RegisterMap.CDR_CONFIG: 0x04,   # rst=0, fast_lock=0, gain=4
     }
 
     for reg, exp in expected.items():
@@ -121,6 +137,8 @@ async def power_up_with_configuration(dut):
 @cocotb.test()
 async def mission_mode_traffic(dut):
     """Verify TX serializer outputs transitions and RX receives valid data."""
+    if skip_in_gate_level(dut, "mission_mode_traffic"):
+        return
     dut._log.info("=== Mission Mode Traffic Test ===")
 
     phy = await base_setup(dut)
@@ -229,8 +247,18 @@ async def mission_mode_traffic(dut):
         "No rx_valid pulses observed after CDR lock — RX data path not working"
     dut._log.info(f"  ✓ {len(received)} nibbles received via loopback")
 
-    # Check FIFO status and prbs_err through status register
-    status = await phy.read_status()
+    # Check FIFO status and prbs_err through status register. The CDR's
+    # balance-window lock detector drops lock during idle by design, so keep
+    # continuous traffic running while the (comparatively slow) I2C status
+    # read completes.
+    keep_alive_status = cocotb.start_soon(
+        TestUtils.send_data_words(dut, num_words=10**9))
+    try:
+        await ClockCycles(dut.clk, 320)
+        status = await phy.read_status()
+    finally:
+        keep_alive_status.kill()
+
     dut._log.info(
         f"  Final: pll_lock={status['pll_lock']}, cdr_lock={status['cdr_lock']}, "
         f"rx_fifo_empty={status['rx_fifo_empty']}"
