@@ -126,6 +126,10 @@ class tx_rx_loopback_test extends uvm_test;
     init_seq = system_init_vseq::type_id::create("init_seq");
     init_seq.start(env.vseqr);
 
+    // csr_init_vseq deliberately leaves PLL_RST asserted so software can
+    // program VCO_TRIM first. Release it before checking PLL_LOCK.
+    env.regmodel.set_pll_reset(1'b0, null);
+
     // --- Finding 2.1 regression check ---
     // TX_CONFIG is still at its POR reset default (TX_EN=0) here -
     // system_init_vseq/csr_init_vseq never touch it. PLL_LOCK must still

@@ -1,5 +1,5 @@
 <BUILD_NAME>,<TEST_LIST>, <GROUP_NAME>,<BUILD_OPTIONS>,<RUN_OPTIONS>,<BUILD_SCRIPT>,<RUN_SCRIPT>
-tt_serdesphy,init_list,INITIALIZATION,,,uvm_tb/scripts/build.py, uvm_tb/scripts/run.py
+tt_serdesphy,init_list,INITIALIZATION,--no-trace,,uvm_tb/scripts/build.py, uvm_tb/scripts/run.py
 ,csr_list,CSR,,,,,
 ,prbs_list,PRBS,,,,,
 ,loopback_list,LOOPBACK,,,,,

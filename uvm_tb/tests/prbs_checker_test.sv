@@ -64,6 +64,13 @@ class prbs_checker_test extends uvm_test;
     init_seq = system_init_vseq::type_id::create("init_seq");
     init_seq.start(env.vseqr);
 
+    // Release PLL reset (csr_init_vseq leaves it asserted for VCO_TRIM setup)
+    // and give the closed-loop calibration time to finish before traffic.
+    env.regmodel.set_pll_reset(1'b0, null);
+    #(20us);
+    if (!vif.pll_lock)
+      `uvm_error("PRBS_CHK", "PLL_LOCK did not assert before PRBS traffic")
+
     env.regmodel.write_reg_by_addr(system_pkg::REG_RX_CONFIG, 8'h05, null);  // RX_EN + RX_PRBS_CHK_EN
     env.regmodel.write_reg_by_addr(system_pkg::REG_TX_CONFIG, 8'h05, null);  // TX_EN + TX_PRBS_EN
 
