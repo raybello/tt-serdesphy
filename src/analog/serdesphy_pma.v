@@ -92,6 +92,16 @@ module serdesphy_pma #(
     wire analog_en;
     assign analog_en = analog_iso_n && analog_reset_n;
 
+    // Debug PLL enable signals
+    initial begin
+        forever begin
+            @(pll_enable or analog_en or pll_bypass_en);
+            $display("[PMA] @ %0.3f us: pll_enable=%0b analog_en=%0b pll_bypass=%0b --> PLL en=%0b",
+                     $realtime/1000000.0, pll_enable, analog_en, pll_bypass_en,
+                     pll_enable && analog_en && !pll_bypass_en);
+        end
+    end
+
     // PLL signals
     wire       pll_clk_240m;
     wire [7:0] pll_vco_control;

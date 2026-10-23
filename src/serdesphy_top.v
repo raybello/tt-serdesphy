@@ -163,7 +163,9 @@ module serdesphy_top #(
 	// =========================================================================
 
 	// PCS Internal Logic - Generate PMA control signals
-	assign pll_enable = phy_en && !iso_en;
+	// PLL enable requires: PHY enabled, not isolated, AND not in reset
+	// This prevents PLL from auto-starting during init before SW configures VCO trim
+	assign pll_enable = phy_en && !iso_en && !pll_rst;
 	assign pll_reset_n = digital_reset_n && !pll_rst;
 	assign pll_bypass_en = pll_bypass;
 	assign pll_iso_n = analog_iso_n;

@@ -28,7 +28,7 @@ class pll_cfg extends uvm_object;
     super.new(name);
     // Default values
     expected_optimal_trim = 4'h8;  // Mid-range, 240 MHz nominal
-    cal_timeout_us = 200.0;         // Max 6 iterations × 20us settling
+    cal_timeout_us = 5000.0;        // Max 8 iterations × 200us settling + margin for restarts
   endfunction
 
   function void do_print(uvm_printer printer);

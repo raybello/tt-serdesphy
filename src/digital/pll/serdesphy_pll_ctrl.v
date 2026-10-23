@@ -173,9 +173,9 @@ module serdesphy_pll_ctrl (
         CAL_DONE        = 3'b101;
 
     // Calibration timing parameters
-    localparam CAL_SETTLE_CYCLES = 16'd480;    // 20us @ 24MHz for PLL to settle
-    localparam CAL_LOCK_CHECK_CYCLES = 16'd24; // 1us @ 24MHz to confirm lock
-    localparam MAX_CAL_ITERATIONS = 4'd6;      // Max iterations for binary search
+    localparam CAL_SETTLE_CYCLES = 16'd4800;   // 200us @ 24MHz for PLL loop startup + settle
+    localparam CAL_LOCK_CHECK_CYCLES = 16'd240; // 10us @ 24MHz to confirm lock
+    localparam MAX_CAL_ITERATIONS = 4'd8;      // Max iterations for binary search
 
     // Loop filter saturation thresholds for calibration
     // Use same thresholds as lock detection to ensure proper frequency
@@ -191,6 +191,8 @@ module serdesphy_pll_ctrl (
     reg [15:0] cal_timer;
     reg        cal_done_reg;
     reg [3:0]  cal_iteration;
+    reg        pll_cp_ok_prev;    // Track PLL enable transitions
+    reg        pll_lock_raw_prev;  // Track PLL lock transitions
 
     // Calibration FSM
     always @(posedge clk_ref_24m or negedge rst_n) begin
@@ -202,30 +204,48 @@ module serdesphy_pll_ctrl (
             cal_timer     <= 16'd0;
             cal_done_reg  <= 1'b0;
             cal_iteration <= 4'd0;
+            pll_cp_ok_prev <= 1'b0;
+            pll_lock_raw_prev <= 1'b0;
         end else begin
+            // Track transitions to detect when PLL is disabled/reset
+            pll_cp_ok_prev <= pll_cp_ok;
+            pll_lock_raw_prev <= pll_lock_raw;
+
+            // Clear cal_done on falling edge of pll_cp_ok or pll_lock_raw
+            // (allows recalibration after PLL disable or pll_rst)
+            if ((pll_cp_ok_prev && !pll_cp_ok) ||  // PLL disabled
+                (pll_lock_raw_prev && !pll_lock_raw)) begin  // PLL reset or lost lock
+                cal_done_reg <= 1'b0;
+                $display("[CAL] @ %0.3f us: EDGE DETECT cleared cal_done_reg (pll_cp_ok: %0b->%0b, pll_lock_raw: %0b->%0b)",
+                         $realtime/1000000.0, pll_cp_ok_prev, pll_cp_ok, pll_lock_raw_prev, pll_lock_raw);
+            end
+
             case (cal_state)
                 CAL_IDLE: begin
-                    if (cal_enable && phy_en && !cal_done_reg) begin
-                        // Start calibration from current CSR value (allows random starting point)
-                        // Use CSR value as initial guess for binary search
+                    if (cal_enable && phy_en && !cal_done_reg && pll_cp_ok) begin
+                        // Start calibration - use CSR value as first try
                         vco_trim_cal  <= csr_vco_trim;
-                        cal_state     <= CAL_INIT;
+                        cal_state     <= CAL_WAIT_SETTLE;  // Skip INIT, go directly to settle
+                        cal_timer     <= 16'd0;
                         search_min    <= 4'h0;
                         search_max    <= 4'hF;
                         cal_iteration <= 4'd0;
-                        cal_done_reg  <= 1'b0;
+                        $display("[CAL] @ %0.3f us: START calibration from CSR trim=%0d, pll_cp_ok=%0b",
+                                 $realtime/1000000.0, csr_vco_trim, pll_cp_ok);
                     end else if (!cal_enable) begin
                         // Pass through CSR value in manual mode
                         vco_trim_cal <= csr_vco_trim;
-                        cal_done_reg <= 1'b0;
                     end
                 end
 
                 CAL_INIT: begin
-                    // Calculate and apply midpoint
+                    // Calculate and apply midpoint for binary search
                     vco_trim_cal <= (search_min + search_max) >> 1;
                     cal_timer    <= 16'd0;
                     cal_state    <= CAL_WAIT_SETTLE;
+                    $display("[CAL] @ %0.3f us: INIT iter=%0d, trying trim=%0d, range=[%0d:%0d]",
+                             $realtime/1000000.0, cal_iteration, (search_min + search_max) >> 1,
+                             search_min, search_max);
                 end
 
                 CAL_WAIT_SETTLE: begin
@@ -235,6 +255,8 @@ module serdesphy_pll_ctrl (
                     end else begin
                         cal_timer <= 16'd0;
                         cal_state <= CAL_CHECK_LOCK;
+                        $display("[CAL] @ %0.3f us: SETTLE done, checking lock (trim=%0d, loop_filter=%0d)",
+                                 $realtime/1000000.0, vco_trim_cal, loop_filter_out);
                     end
                 end
 
@@ -243,11 +265,14 @@ module serdesphy_pll_ctrl (
                     if (pll_lock_reg) begin
                         // Locked! Calibration successful
                         cal_state    <= CAL_DONE;
-                        cal_done_reg <= 1'b1;
+                        cal_done_reg <= 1'b1;  // Set when transitioning to DONE
+                        $display("[CAL] @ %0.3f us: LOCKED! Final trim=%0d", $realtime/1000000.0, vco_trim_cal);
                     end else if (cal_timer < CAL_LOCK_CHECK_CYCLES) begin
                         cal_timer <= cal_timer + 1;
                     end else begin
                         cal_state <= CAL_UPDATE;
+                        $display("[CAL] @ %0.3f us: NO LOCK, updating search (loop_filter=%0d)",
+                                 $realtime/1000000.0, loop_filter_out);
                     end
                 end
 
@@ -259,7 +284,9 @@ module serdesphy_pll_ctrl (
                         (cal_iteration >= MAX_CAL_ITERATIONS)) begin
                         // Done - use current value
                         cal_state    <= CAL_DONE;
-                        cal_done_reg <= 1'b1;
+                        cal_done_reg <= 1'b1;  // Set when transitioning to DONE
+                        $display("[CAL] @ %0.3f us: DONE (converged or max iter), final trim=%0d",
+                                 $realtime/1000000.0, vco_trim_cal);
                     end else begin
                         // Determine search direction based on loop filter position
                         // For 200ppm lock requirement, we need loop filter near 128
@@ -268,28 +295,40 @@ module serdesphy_pll_ctrl (
                             // Loop filter saturated high (>160) -> VCO too slow
                             // Need higher frequency -> increase vco_trim
                             search_min <= vco_trim_cal + 1;
+                            $display("[CAL] @ %0.3f us: UPDATE loop=%0d >%0d SAT_HIGH, search_min: %0d -> %0d",
+                                     $realtime/1000000.0, loop_filter_out, LOOP_SAT_HIGH,
+                                     search_min, vco_trim_cal + 1);
                         end else if (loop_filter_out < LOOP_SAT_LOW) begin
                             // Loop filter saturated low (<96) -> VCO too fast
                             // Need lower frequency -> decrease vco_trim
                             search_max <= vco_trim_cal - 1;
-                        end else if (loop_filter_out > 8'd128) begin
-                            // Loop filter above center (128-160) -> VCO slightly slow
+                            $display("[CAL] @ %0.3f us: UPDATE loop=%0d <%0d SAT_LOW, search_max: %0d -> %0d",
+                                     $realtime/1000000.0, loop_filter_out, LOOP_SAT_LOW,
+                                     search_max, vco_trim_cal - 1);
+                        end else if (loop_filter_out >= 8'd128) begin
+                            // Loop filter at or above center (128-160) -> VCO slow or nominal
                             // Need higher frequency -> increase vco_trim
                             search_min <= vco_trim_cal + 1;
+                            $display("[CAL] @ %0.3f us: UPDATE loop=%0d >=128 (slow/nominal), search_min: %0d -> %0d",
+                                     $realtime/1000000.0, loop_filter_out, search_min, vco_trim_cal + 1);
                         end else begin
-                            // Loop filter below center (96-128) -> VCO slightly fast
+                            // Loop filter below center (96-127) -> VCO slightly fast
                             // Need lower frequency -> decrease vco_trim
                             search_max <= vco_trim_cal - 1;
+                            $display("[CAL] @ %0.3f us: UPDATE loop=%0d <128 (fast), search_max: %0d -> %0d",
+                                     $realtime/1000000.0, loop_filter_out, search_max, vco_trim_cal - 1);
                         end
                         cal_state <= CAL_INIT;
                     end
                 end
 
                 CAL_DONE: begin
-                    // Hold calibration result
-                    cal_done_reg <= 1'b1;
-                    if (!cal_enable || !phy_en) begin
+                    // Hold in done state - cal_done_reg was already set when entering
+                    // Return to IDLE if disabled OR if cal_done_reg was cleared (by edge detection)
+                    if (!cal_enable || !phy_en || !cal_done_reg) begin
                         cal_state <= CAL_IDLE;
+                        $display("[CAL] @ %0.3f us: Exiting DONE to IDLE (cal_enable=%0b, phy_en=%0b, cal_done_reg=%0b)",
+                                 $realtime/1000000.0, cal_enable, phy_en, cal_done_reg);
                     end
                 end
 
