@@ -1,71 +1,51 @@
 /*
  * SerDes PHY PLL Charge Pump
- * Placeholder behavioral model for future analog charge pump circuit
- * All ports are connected but the charge pump does not actively operate
+ *
+ * Behavioral, simulation-only model of a tri-state (UP/DOWN) charge pump.
+ * The output is a signed pump value, not a single-bit "charge" flag:
+ *   charge_out == 0  -> high-Z: the loop filter must HOLD its state
+ *   charge_out  > 0  -> UP current
+ *   charge_out  < 0  -> DOWN current
+ *
+ * The magnitude is (1 << cp_current), mirroring the datasheet's binary-weighted
+ * 10/20/40/80 uA current selection. The loop filter is clocked by the VCO in
+ * simulation, so the PFD's UP/DN pulse widths are integrated at VCO resolution;
+ * this is what gives the loop its phase-error magnitude rather than a bang-bang
+ * sign-only response.
+ *
+ * In silicon this whole block is replaced by the real charge pump; synthesis
+ * sees a constant zero (the PLL is a hard macro).
  */
 
 `default_nettype none
+`timescale 1ns / 1ps
 
 module serdesphy_ana_pll_charge_pump (
-    // Clock and reset
-    input  wire       clk,             // System clock
-    input  wire       rst_n,           // Active-low reset
-    input  wire       enable,          // Enable charge pump
+    input  wire       clk,             // Unused in the behavioral model
+    input  wire       rst_n,
+    input  wire       enable,
 
-    // Control inputs
-    input  wire [1:0] cp_current,      // Charge pump current select
+    input  wire [1:0] cp_current,      // 10/20/40/80 uA select
 
-    // Phase detector inputs
-    input  wire       up_pulse,        // UP pulse from phase detector
-    input  wire       down_pulse,      // DOWN pulse from phase detector
+    input  wire       up_pulse,        // UP pulse from phase/frequency detector
+    input  wire       down_pulse,      // DOWN pulse from phase/frequency detector
 
-    // Control output
-    output wire       charge_out       // Charge pump output
+    output reg signed [4:0] charge_out // Signed tri-state pump value
 );
 
-    // Behavioral charge pump model
-    // Output 1 for UP (increase VCO freq), 0 for DOWN (decrease VCO freq)
-    reg charge_out_reg;
+    integer pump_gain;
 
-    reg [7:0] up_count, down_count;
-    reg debug_printed;
-
-    always @(posedge clk or negedge rst_n) begin
-        if (!rst_n) begin
-            charge_out_reg <= 1'b0;
-            up_count <= 8'h0;
-            down_count <= 8'h0;
-            debug_printed <= 1'b0;
-        end else if (!enable) begin
-            charge_out_reg <= 1'b0;
-            up_count <= 8'h0;
-            down_count <= 8'h0;
-            debug_printed <= 1'b0;
-        end else begin
-            // UP pulse takes priority (if both asserted, favor UP)
-            if (up_pulse) begin
-                charge_out_reg <= 1'b1;  // Drive loop filter UP
-                up_count <= (up_count < 255) ? up_count + 1 : 255;
-            end else if (down_pulse) begin
-                charge_out_reg <= 1'b0;  // Drive loop filter DOWN
-                down_count <= (down_count < 255) ? down_count + 1 : 255;
-            end
-            // If neither, hold previous value
-
-            // Print debug after 100 cycles
-            if ((up_count + down_count >= 100) && !debug_printed) begin
-`ifndef SYNTHESIS
-                $display("[CP] @ %0.3f us: UP=%0d DOWN=%0d (after 100 pulses)",
-                         $realtime/1000000.0, up_count, down_count);
-`endif
-                debug_printed <= 1'b1;
-            end
+    always @(*) begin
+        pump_gain = 1 << cp_current;
+        charge_out = 5'sd0;
+        if (enable) begin
+            if (up_pulse)   charge_out = charge_out + pump_gain;
+            if (down_pulse) charge_out = charge_out - pump_gain;
         end
     end
 
-    assign charge_out = charge_out_reg;
-
-    // Unused input
-    wire _unused = &{cp_current};
+    wire _unused = &{clk, rst_n};
 
 endmodule
+
+`default_nettype wire

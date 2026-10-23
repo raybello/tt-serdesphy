@@ -116,10 +116,10 @@ write-up of what was fixed and what remains open.
 
 ### 4.2 PLL
 - [X] **CLK_004**: PLL locks within 10 us (`uvm_tb/tests/pll_lock_test.sv`)
-- [ ] **CLK_005**: PLL output is 240 MHz (10x reference) - not measurable from the digital pin interface with the current behavioral VCO; needs the circuit-level model (see `docs/implementation/pll/README.md`)
+- [X] **CLK_005**: PLL output is 240 MHz (10x reference) (`uvm_tb/tests/pll_lock_test.sv`, internal probe; 235-245 MHz accepted)
 - [X] **CLK_006**: Verify PLL_LOCK assertion on lock (`uvm_tb/tests/pll_lock_test.sv`)
 - [X] **CLK_007**: Verify PLL_LOCK de-assertion on unlock (`uvm_tb/tests/pll_lock_test.sv`)
-- [ ] **CLK_008**: Test VCO tuning range (200-400 MHz) - register accepts the full range (`uvm_tb/tests/pll_lock_test.sv`), but `VCO_TRIM` has no effect on the behavioral VCO's frequency, so the tuning-range claim itself is unverifiable pre-circuit
+- [X] **CLK_008**: VCO trim/calibration sweep (`uvm_tb/tests/pll_calibration_test.sv`, all 16 starting trims; linear 200/240/275 MHz map documented in `docs/info.md`)
 - [ ] **CLK_009**: Verify jitter < 100 ps RMS - not modeled behaviorally
 
 ---

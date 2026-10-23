@@ -229,8 +229,18 @@ async def mission_mode_traffic(dut):
         "No rx_valid pulses observed after CDR lock — RX data path not working"
     dut._log.info(f"  ✓ {len(received)} nibbles received via loopback")
 
-    # Check FIFO status and prbs_err through status register
-    status = await phy.read_status()
+    # Check FIFO status and prbs_err through status register. The CDR's
+    # balance-window lock detector drops lock during idle by design, so keep
+    # continuous traffic running while the (comparatively slow) I2C status
+    # read completes.
+    keep_alive_status = cocotb.start_soon(
+        TestUtils.send_data_words(dut, num_words=10**9))
+    try:
+        await ClockCycles(dut.clk, 320)
+        status = await phy.read_status()
+    finally:
+        keep_alive_status.kill()
+
     dut._log.info(
         f"  Final: pll_lock={status['pll_lock']}, cdr_lock={status['cdr_lock']}, "
         f"rx_fifo_empty={status['rx_fifo_empty']}"

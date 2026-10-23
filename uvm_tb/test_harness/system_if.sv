@@ -37,6 +37,17 @@ interface system_if;
   logic       rxn;
 
   // ------------------------------------------------------------------
+  // Internal PLL observability (driven by system.sv from the DUT hierarchy)
+  // ------------------------------------------------------------------
+  logic       clk_240m_pll;
+  logic [7:0] pll_vco_control;
+  logic [3:0] pll_vco_trim;
+  logic       pll_cal_done;
+  logic       pll_cal_active;
+  logic       pll_lock_raw;
+  real        pll_freq_mhz;
+
+  // ------------------------------------------------------------------
   // I2C bus (open-drain, wired-AND). scl is master-only (no clock
   // stretching modeled). sda is resolved from both the i2c_driver's
   // and the DUT's open-drain contributions.

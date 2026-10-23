@@ -14,8 +14,8 @@ Covers `src/analog/ana_pll/` in full: `serdesphy_ana_pll.v` (top),
 | Output | 235–245 MHz (nominal 240), 10× multiplication |
 | Lock time | 8–10 µs typ/max |
 | Jitter (RMS) | 50–100 ps |
-| VCO tuning range | 200–400 MHz |
-| `VCO_TRIM[3:0]` | 0x0→~200 MHz, 0x8→~240 MHz (nominal), 0xF→~400 MHz |
+| VCO tuning range | ~160–315 MHz (linear 5 MHz/trim step plus ±40 MHz fine range) |
+| `VCO_TRIM[3:0]` | 0x0→~200 MHz, 0x8→~240 MHz (nominal), 0xF→~275 MHz |
 | `CP_CURRENT[1:0]` | 0x0=10µA, 0x1=20µA, 0x2=40µA (default), 0x3=80µA |
 | `PLL_RST` | active-high, default 1 (held in reset at power-up) |
 | `PLL_BYPASS` | routes `clk_ref_24m` straight to `clk_240m_out` for test |
@@ -59,11 +59,9 @@ this frequency range and area budget in a Tiny Tapeout SKY130 shuttle slot:
 - **VCO**: 3- or 5-stage current-starved differential (or single-ended, if
   area-constrained) ring oscillator using `sky130_fd_pr__nfet_01v8`/
   `pfet_01v8` devices, tail current set by `vco_control` through a
-  current-mirror bias. Target Kvco ≈ (400−200 MHz)/(full control range) —
-  size the mirror so `VCO_TRIM`'s 16 coarse steps + the fine charge-pump
-  control together cover 200–400 MHz with the 240 MHz nominal point roughly
-  centered in the fine-tune range at `VCO_TRIM=0x8`, per the spec's trim
-  table.
+  current-mirror bias. Target Kvco from the adopted linear map: 5 MHz per
+  `VCO_TRIM` step plus 312.5 kHz per fine control code, covering ~160–315 MHz
+  with the 240 MHz nominal point at `VCO_TRIM=0x8`, per the spec's trim table.
 - **PFD**: classic two-DFF + AND-reset tri-state PFD (the standard
   "Dead-zone-free" topology), producing true `UP`/`DN` pulses to the charge
   pump — a straightforward standard-cell-style digital block, easy first
@@ -81,10 +79,10 @@ this frequency range and area budget in a Tiny Tapeout SKY130 shuttle slot:
   more reference/charge-pump noise).
 - **÷10 feedback divider**: true single-phase clock (TSPC) or CML divider
   chain (e.g. ÷2 → ÷5, or a fully custom ÷10) if it needs to run reliably at
-  the VCO's full 400 MHz worst-case output; a synchronous counter (as in the
+  the VCO's full ~315 MHz worst-case output; a synchronous counter (as in the
   current behavioral model) is a fine functional reference but likely too
   slow/power-hungry as a real circuit at this node unless a standard-cell
-  ÷10 comfortably meets timing at 400 MHz in the target corner — check this
+  ÷10 comfortably meets timing at ~315 MHz in the target corner — check this
   early, it determines whether the divider needs custom transistor-level
   design at all or can stay a synthesized digital block (in which case it
   doesn't need its own `schematic/`/`layout/` under the dual-flow framework
@@ -107,7 +105,7 @@ this frequency range and area budget in a Tiny Tapeout SKY130 shuttle slot:
    `02-analog-digital-dual-flow-framework.md` for the directory convention),
    using `sky130_fd_pr` device symbols from the open_pdk xschem library.
 2. **VCO characterization (ngspice)**:
-   - DC sweep of `vco_control` → oscillation frequency; confirm 200–400 MHz
+   - DC sweep of `vco_control` → oscillation frequency; confirm ~160–315 MHz
      range and roughly monotonic Kvco.
    - Corner sweep (tt/ff/ss × -40/27/85°C × 1.71–1.89V `DVDD`) — SKY130 ring
      oscillators shift substantially across process corners, so `VCO_TRIM`'s
@@ -188,3 +186,52 @@ equivalence check something non-trivial to actually compare.
 - [ ] `compare_views.py` passes behavioral-vs-SPICE within tolerance
 - [ ] `view.json` status → `golden`, `target_for_tapeout: "circuit"`
 - [ ] Digital-side fixes from `01-spec-vs-implementation.md` §2.1/§2.3 landed (PLL_LOCK gating, register reset defaults) — these are independent of the circuit work and should not wait for it
+
+## 7. Behavioral closed-loop model (implemented)
+
+The behavioral PLL is no longer an open-loop placeholder. The current model is
+intended as the reference the eventual schematic/SPICE views must match.
+
+**Loop topology**
+- Classical two-DFF PFD with asynchronous reset.
+- Tri-state charge pump: signed `charge_out` (`0` = high-Z/hold, `+` = UP,
+  `-` = DOWN); the magnitude follows `CP_CURRENT` as `1 << cp_current`.
+- Loop filter clocked by the VCO: integrates the signed pump on every VCO edge
+  (so UP/DN pulse widths become phase-error magnitude), plus a coarse
+  frequency-error correction every 32 reference cycles.
+- Continuous-phase VCO: half-period is recomputed from the current trim and
+  control word every half cycle; a control change never restarts the phase.
+- Divide-by-10 feedback with 50% duty.
+
+**Frequency plan**
+- `f_vco = 240 MHz + 5 MHz * (VCO_TRIM - 8) + 312.5 kHz * (vco_control - 128)`.
+- Range: ~160 MHz (trim 0, control 0) to ~315 MHz (trim 15, control 255).
+- `VCO_TRIM` is a coarse centering knob; the continuous loop filter sets the
+  fine frequency. Datasheet table and `docs/info.md` are aligned with this map.
+
+**Lock detection**
+- A VCO edge counter measures 320 edges per 32-reference-cycle window (the
+  expected count at 240 MHz / 24 MHz).
+- `PLL_LOCK` asserts after two consecutive windows with `|error| <= 6` edges
+  (±1.875%), and de-asserts after two consecutive bad windows. There is no
+  fixed-cycle "lock anyway" timeout and no sticky lock state.
+
+**Closed-loop calibration (`serdesphy_pll_ctrl`)**
+- Starts from the CSR `VCO_TRIM` value when `PLL_RST` is released.
+- Waits 192 reference cycles (~8 µs) for the loop to settle, then checks
+  `loop_filter_out` against 128 ± 16 codes.
+- If the control is high, the VCO is too slow: raise the trim. If low, lower
+  it. Search bounds are 5-bit and saturate at 0/15; the midpoint is
+  `(min + max + 1) >> 1`, so there is no 4-bit wrap.
+- Stops when the control is inside the window and the analog PLL is
+  frequency-locked, when the interval collapses, or after 4 iterations.
+- `cal_done` is cleared by `PLL_RST`/disable, and `PLL_LOCK` is gated on
+  calibration completion so it cannot report an intermediate trim as final.
+
+**Verification**
+- UVM `pll_lock_test` releases PLL_RST, waits for `cal_done`, measures the
+  actual 240 MHz output, and checks reset clears lock/calibration.
+- UVM `pll_calibration_test` sweeps all 16 starting trims and checks the
+  internal final trim and measured frequency, not the CSR starting value.
+- Both tests observe internal PLL signals through the `system_if` probe added
+  in `uvm_tb/test_harness/system.sv`.

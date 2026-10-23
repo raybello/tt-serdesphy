@@ -22,6 +22,7 @@ module system (
   wire  [7:0] uo_out;
   wire  [7:0] uio_out;
   wire  [7:0] uio_oe;
+  integer     pll_freq_edges;
 
   // test_mode/lpbk_en/tx_data/tx_valid are driven by phy_io_agent
   // (uvm_tb/agents/phy_io_agent); rxp/rxn are unused in loopback mode
@@ -82,5 +83,30 @@ module system (
       .clk    (clk),
       .rst_n  (rst_n)
   );
+
+  // ------------------------------------------------------------------
+  // PLL observability for the UVM PLL tests. Hierarchical references are
+  // intentional: these are internal analog behavioral-model signals, not
+  // part of the Tiny Tapeout pin interface.
+  // ------------------------------------------------------------------
+  assign vif.clk_240m_pll    = dut.u_top.u_pma.u_pll.clk_240m_out;
+  assign vif.pll_vco_control = dut.u_top.u_pma.u_pll.vco_control;
+  assign vif.pll_vco_trim    = dut.u_top.u_pcs.u_pll_ctrl.vco_trim_out;
+  assign vif.pll_cal_done    = dut.u_top.u_pcs.u_pll_ctrl.cal_done;
+  assign vif.pll_cal_active  = dut.u_top.u_pcs.u_pll_ctrl.cal_active;
+  assign vif.pll_lock_raw    = dut.u_top.u_pma.u_pll.pll_lock;
+
+  // 1 us frequency monitor: count VCO edges and present MHz directly.
+  initial begin
+    pll_freq_edges = 0;
+    vif.pll_freq_mhz = 0.0;
+    forever begin
+      #1000;
+      vif.pll_freq_mhz = pll_freq_edges / 1.0;
+      pll_freq_edges = 0;
+    end
+  end
+
+  always @(posedge vif.clk_240m_pll) pll_freq_edges = pll_freq_edges + 1;
 
 endmodule : system

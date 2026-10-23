@@ -233,9 +233,9 @@ read.
 | 240 MHz TX domain from PLL | ✅ implemented (behavioral VCO always free-runs at 240 MHz in sim) |
 | 240 MHz RX domain from CDR | ⚠️ **not actually independent — see Finding 2.2** |
 | PLL 10× multiplication, ÷10 feedback divider | ✅ structurally present (`serdesphy_ana_frequency_divider`, counter-based ÷10) |
-| PLL lock time 8–10 µs | ⚠️ modeled as a fixed 240-cycle (10 µs @ 24 MHz) counter in `serdesphy_ana_pll.v`'s `STATE_ACQUIRE`, **independent of `vco_trim`/`cp_current`** — see §3.6 |
+| PLL lock time 8–10 µs | ✅ closed-loop frequency-window lock; default trim 8 locks in ~8.3 µs in UVM (`pll_lock_test.sv`). Extreme starting trims need closed-loop calibration first (~15–36 µs) |
 | PLL jitter 50–100 ps RMS | ❌ not modeled at all (behavioral VCO is a pure fixed-period toggle); no jitter injection anywhere in the digital-only model — expected until the real VCO circuit exists (see `pll/README.md`) |
-| VCO tuning range 200–400 MHz | ❌ not modeled — behavioral VCO frequency is fixed at 240 MHz regardless of `vco_trim`/`vco_control` (see §3.6) |
+| VCO tuning range ~160–315 MHz | ✅ modeled with the linear 5 MHz/trim + 312.5 kHz/fine-control map (see `pll/README.md` §7) |
 
 ### 3.2 Transmit datapath (§4.2)
 

@@ -1,36 +1,39 @@
 /*
- * SerDes PHY Phase Frequency Detector
- * Classical PFD with D flip-flops and reset logic
- * Generates proportional UP/DOWN pulses based on phase/frequency error
+ * SerDes PHY Phase-Frequency Detector
+ *
+ * Behavioral classical PFD: two resettable flip-flops produce UP/DN pulses
+ * whose widths are the phase error. The charge pump plus VCO-clocked loop
+ * filter integrate those widths, so this behaves as a real tri-state PFD
+ * rather than a sign-only bang-bang detector.
+ *
+ * The explicit initial values matter for RTL simulators that do not
+ * zero-initialize regs (Icarus): the PLL is enabled only after rst_n has
+ * already gone high, so there may be no negedge rst_n to reset these regs.
+ * Synthesis replaces this block with the analog PFD.
  */
 
 `default_nettype none
+`timescale 1ns / 1ps
 
 module serdesphy_ana_phase_frequency_detector (
-    // Clock inputs
-    input  wire       clk_ref,        // 24 MHz reference clock
-    input  wire       clk_feedback,    // 24 MHz feedback from ÷10 divider
-    input  wire       rst_n,          // Active-low reset
-    input  wire       enable,         // Enable PFD
+    input  wire       clk_ref,         // Reference clock
+    input  wire       clk_feedback,    // Divided VCO feedback clock
+    input  wire       rst_n,
+    input  wire       enable,
 
-    // Phase detector outputs
-    output wire       up_pulse,       // UP pulse for charge pump
-    output wire       down_pulse      // DOWN pulse for charge pump
+    output wire       up_pulse,
+    output wire       down_pulse
 );
 
 `ifndef SYNTHESIS
-    // Simulation-only behavioral PFD
-    // Classical PFD with D flip-flops
-    // When ref leads feedback: up_pulse is wider than down_pulse
-    // When feedback leads ref: down_pulse is wider than up_pulse
-
     reg up_ff, down_ff;
-    wire reset_both;
+    wire reset_both = up_ff && down_ff;
 
-    // Reset both flip-flops when both are high (dead zone elimination)
-    assign reset_both = up_ff && down_ff;
+    initial begin
+        up_ff   = 1'b0;
+        down_ff = 1'b0;
+    end
 
-    // UP flip-flop: set on ref edge, reset when both high
     always @(posedge clk_ref or negedge rst_n or posedge reset_both) begin
         if (!rst_n) begin
             up_ff <= 1'b0;
@@ -41,7 +44,6 @@ module serdesphy_ana_phase_frequency_detector (
         end
     end
 
-    // DOWN flip-flop: set on feedback edge, reset when both high
     always @(posedge clk_feedback or negedge rst_n or posedge reset_both) begin
         if (!rst_n) begin
             down_ff <= 1'b0;
@@ -52,14 +54,14 @@ module serdesphy_ana_phase_frequency_detector (
         end
     end
 
-    // Output assignments
-    assign up_pulse = up_ff && enable;
+    assign up_pulse   = up_ff && enable;
     assign down_pulse = down_ff && enable;
 
 `else
-    // Synthesis placeholder - replaced by analog PFD in silicon
-    assign up_pulse = 1'b0;
+    assign up_pulse   = 1'b0;
     assign down_pulse = 1'b0;
 `endif
 
 endmodule
+
+`default_nettype wire

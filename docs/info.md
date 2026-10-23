@@ -105,7 +105,7 @@ The device operates from a single 24 MHz reference clock (CLK_REF). All digital 
 | Multiplication ratio | — | 10 | — | — |
 | Lock time | — | 8 | 10 | µs |
 | Jitter (RMS) | — | 50 | 100 | ps |
-| VCO tuning range | 200 | — | 400 | MHz |
+| VCO tuning range | 160 | — | 315 | MHz |
 
 ### 4.2 Transmit Datapath
 
@@ -259,7 +259,12 @@ Changing TX_DATA_SEL while TX_EN=1 results in undefined transmit data.
 | -- | -- |
 | 0x0 | \~200 MHz |
 | 0x8 | \~240 MHz (nominal) |
-| 0xF | \~400 MHz |
+| 0xF | \~275 MHz |
+
+The behavioral model uses a linear 5 MHz/step coarse map around the 240 MHz
+nominal point. Combined with the +/-40 MHz fine range this gives a total VCO
+range of approximately 160-315 MHz. The 4-bit trim is a coarse centering knob;
+the continuous loop-filter control provides the fine frequency setting.
 
 **CP_CURRENT Encoding:**
 

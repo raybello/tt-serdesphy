@@ -1,26 +1,14 @@
-// PLL Calibration Test - Validates automatic binary search from random initial conditions
+// PLL calibration test - closed-loop VCO trim search from every starting point.
 //
-// Tests that pll_ctrl performs binary search calibration correctly from any
-// initial vco_trim value. This matches real ASIC verification methodology:
+// The DUT's pll_ctrl performs a closed-loop binary search: after each trim
+// change it waits for the analog loop to settle, then uses the loop-filter
+// control voltage to decide whether the VCO is too slow or too fast. This test
+// sweeps every possible initial CSR trim (0..15), waits for cal_done, and
+// checks the *internal* final trim plus the measured 240 MHz output.
 //
-// Test methodology:
-//   1. Randomize initial vco_trim value (0-15)
-//   2. Write randomized value to CSR (sets starting point)
-//   3. Enable calibration (cal_enable=1 starts binary search)
-//   4. pll_ctrl binary search finds optimal trim value
-//   5. Verify PLL locks and optimal trim is found
-//
-// This verifies:
-//   - Calibration converges from ANY starting point
-//   - Binary search algorithm is robust
-//   - Loop filter saturation detection works correctly
-//   - Both coarse (vco_trim) and fine (loop filter) tuning achieve lock
-//
-// Real ASIC behavior:
-//   - Power-up: vco_trim could be any value (POR state undefined)
-//   - Software writes initial trim guess to CSR
-//   - Enable PLL: calibration FSM runs binary search
-//   - Final trim value is optimal for 240 MHz target
+// Unlike the earlier version, this does not read back CSR vco_trim (that is the
+// starting guess, not the calibrated result) and does not accept a lock bit
+// without checking the frequency.
 
 class pll_calibration_test extends uvm_test;
 
@@ -28,7 +16,8 @@ class pll_calibration_test extends uvm_test;
 
   serdesphy_env      env;
   virtual system_if  vif;
-  pll_cfg            cfg;  // Randomized PLL configuration
+  pll_cfg            cfg;
+  bit                last_cal_got;
 
   function new(string name = "pll_calibration_test", uvm_component parent = null);
     super.new(name, parent);
@@ -42,167 +31,89 @@ class pll_calibration_test extends uvm_test;
       `uvm_fatal("NOVIF", "pll_calibration_test: virtual interface not set")
   endfunction
 
+  task automatic wait_cal_done(input realtime timeout_ns);
+    realtime t0;
+    t0 = $realtime;
+    last_cal_got = 1'b0;
+    fork : cal_wait_blk
+      begin
+        wait (vif.pll_cal_done == 1'b1);
+        last_cal_got = 1'b1;
+      end
+      begin
+        #(timeout_ns * 1ns);
+      end
+    join_any
+    disable cal_wait_blk;
+    if (last_cal_got)
+      `uvm_info("PLL_CAL", $sformatf("  cal_done after %0.3f us", ($realtime - t0) / 1000.0), UVM_LOW)
+  endtask
+
+  function automatic void check_result(input int unsigned start_trim,
+                                       input int unsigned final_trim,
+                                       input real freq_mhz);
+    if (freq_mhz < 235.0 || freq_mhz > 245.0)
+      `uvm_error("PLL_CAL",
+                 $sformatf("start=%0d final=%0d: output %0.3f MHz outside 235-245 MHz",
+                           start_trim, final_trim, freq_mhz))
+    else
+      `uvm_info("PLL_CAL",
+                $sformatf("  start=%0d -> final=%0d, freq=%0.3f MHz, ctrl=%0d",
+                          start_trim, final_trim, freq_mhz, vif.pll_vco_control),
+                UVM_LOW)
+
+    if (final_trim < 6 || final_trim > 10)
+      `uvm_warning("PLL_CAL",
+                   $sformatf("start=%0d final trim=%0d is outside the expected [6:10]",
+                             start_trim, final_trim))
+  endfunction
+
   task run_phase(uvm_phase phase);
     system_init_vseq init_seq;
-    realtime t0;
-    int final_trim;
-    int initial_trim;
+    int unsigned      start_trim;
+    int unsigned      final_trim;
+    real              freq_mhz;
 
     phase.raise_objection(this);
 
-    // Test 1: Calibration from randomized starting point
-    `uvm_info("PLL_CAL", "Test 1: Calibration from randomized initial vco_trim", UVM_LOW)
-
-    // Randomize initial trim value
-    if (!cfg.randomize()) begin
-      `uvm_fatal("RAND_FAIL", "Failed to randomize pll_cfg")
-    end
-    initial_trim = cfg.initial_vco_trim;
-    `uvm_info("PLL_CAL", $sformatf("  Randomized initial_vco_trim = %0d (0x%0h)",
-                                    initial_trim, initial_trim), UVM_LOW)
-
-    // Initialize system but don't enable PLL yet
     init_seq = system_init_vseq::type_id::create("init_seq");
     init_seq.start(env.vseqr);
 
-    // Disable PLL before setting initial trim
+    // csr_init_vseq intentionally leaves PLL_RST=1 so software can program the
+    // starting trim before enabling the PLL.
     env.regmodel.set_pll_reset(1'b1, null);
     #(1us);
 
-    // Write randomized initial trim value
-    env.regmodel.write_csr("pll_config", "vco_trim", initial_trim[3:0], null);
-    `uvm_info("PLL_CAL", $sformatf("  Set initial vco_trim CSR = %0d", initial_trim), UVM_LOW)
+    for (int unsigned t = 0; t < 16; t++) begin
+      start_trim = t[3:0];
+      `uvm_info("PLL_CAL", $sformatf("Calibrating from initial VCO_TRIM=%0d", start_trim), UVM_LOW)
 
-    // Enable PLL - this starts automatic calibration from the random initial value
-    env.regmodel.set_pll_reset(1'b0, null);
-    `uvm_info("PLL_CAL", "  PLL enabled - calibration started", UVM_LOW)
-
-    // Wait for calibration to complete
-    t0 = $realtime;
-    fork
-      begin
-        wait(vif.pll_lock == 1'b1);
-      end
-      begin
-        #(cfg.cal_timeout_us * 1us);
-      end
-    join_any
-    disable fork;
-
-    if (vif.pll_lock) begin
-      `uvm_info("PLL_CAL", $sformatf("Test 1 PASS: Calibrated from trim=%0d and locked in %0.3f us",
-                                      initial_trim, ($realtime - t0)/1000.0), UVM_LOW)
-
-      // Read final calibrated trim value
-      env.regmodel.read_csr("pll_config", "vco_trim", final_trim, null);
-      `uvm_info("PLL_CAL", $sformatf("  Initial: %0d → Final: %0d (delta=%0d)",
-                                      initial_trim, final_trim, $signed(final_trim - initial_trim)), UVM_LOW)
-
-      // Verify it's in the reasonable range (should be around trim=8 for 240 MHz)
-      if (final_trim >= 6 && final_trim <= 10) begin
-        `uvm_info("PLL_CAL", $sformatf("  Final trim=%0d is optimal (expected ~8)", final_trim), UVM_LOW)
-      end else begin
-        `uvm_warning("PLL_CAL", $sformatf("  Final trim=%0d is outside expected range [6:10]", final_trim))
-      end
-    end else begin
-      `uvm_error("PLL_CAL", $sformatf("Test 1 FAIL: PLL did not lock from initial_trim=%0d", initial_trim))
-    end
-
-    // Test 2: Multiple random starting points
-    `uvm_info("PLL_CAL", "Test 2: Calibration from multiple random starting points", UVM_LOW)
-
-    for (int iteration = 0; iteration < 5; iteration++) begin
-      // Randomize new starting point
-      if (!cfg.randomize()) begin
-        `uvm_fatal("RAND_FAIL", "Failed to randomize pll_cfg")
-      end
-      initial_trim = cfg.initial_vco_trim;
-
-      // Reset and set new starting point
       env.regmodel.set_pll_reset(1'b1, null);
       #(1us);
-      env.regmodel.write_csr("pll_config", "vco_trim", initial_trim[3:0], null);
+      env.regmodel.write_csr("pll_config", "vco_trim", start_trim, null);
       env.regmodel.set_pll_reset(1'b0, null);
 
-      // Wait for calibration
-      t0 = $realtime;
-      fork
-        begin
-          wait(vif.pll_lock == 1'b1);
-        end
-        begin
-          #(cfg.cal_timeout_us * 1us);
-        end
-      join_any
-      disable fork;
-
-      if (vif.pll_lock) begin
-        env.regmodel.read_csr("pll_config", "vco_trim", final_trim, null);
-        `uvm_info("PLL_CAL", $sformatf("  Iter %0d: start=%0d → final=%0d, locked in %0.3f us",
-                                        iteration+1, initial_trim, final_trim,
-                                        ($realtime - t0)/1000.0), UVM_LOW)
-      end else begin
-        `uvm_error("PLL_CAL", $sformatf("  Iter %0d: FAILED to lock from start=%0d",
-                                         iteration+1, initial_trim))
+      wait_cal_done(500_000);
+      if (!last_cal_got) begin
+        `uvm_error("PLL_CAL", $sformatf("start=%0d: cal_done did not assert", start_trim))
+        continue;
       end
+
+      #(1us); // let the 1 us frequency monitor refresh
+      final_trim = vif.pll_vco_trim;
+      freq_mhz   = vif.pll_freq_mhz;
+
+      if (!vif.pll_lock)
+        `uvm_error("PLL_CAL", $sformatf("start=%0d: PLL_LOCK not set after cal_done", start_trim))
+
+      check_result(start_trim, final_trim, freq_mhz);
     end
 
-    `uvm_info("PLL_CAL", "Test 2 PASS: All iterations converged successfully", UVM_LOW)
-
-    // Test 3: Verify calibration handles extreme starting points
-    `uvm_info("PLL_CAL", "Test 3: Calibration from extreme starting points", UVM_LOW)
-
-    // Test from minimum (trim=0)
+    // Calibration must be cleared by PLL_RST so a subsequent run can recalibrate.
     env.regmodel.set_pll_reset(1'b1, null);
-    #(1us);
-    env.regmodel.write_csr("pll_config", "vco_trim", 4'h0, null);
-    env.regmodel.set_pll_reset(1'b0, null);
-
-    t0 = $realtime;
-    fork
-      begin
-        wait(vif.pll_lock == 1'b1);
-      end
-      begin
-        #(cfg.cal_timeout_us * 1us);
-      end
-    join_any
-    disable fork;
-
-    if (vif.pll_lock) begin
-      env.regmodel.read_csr("pll_config", "vco_trim", final_trim, null);
-      `uvm_info("PLL_CAL", $sformatf("  From MIN (0): final=%0d, time=%0.3f us",
-                                      final_trim, ($realtime - t0)/1000.0), UVM_LOW)
-    end else begin
-      `uvm_error("PLL_CAL", "  FAILED to calibrate from trim=0")
-    end
-
-    // Test from maximum (trim=15)
-    env.regmodel.set_pll_reset(1'b1, null);
-    #(1us);
-    env.regmodel.write_csr("pll_config", "vco_trim", 4'hF, null);
-    env.regmodel.set_pll_reset(1'b0, null);
-
-    t0 = $realtime;
-    fork
-      begin
-        wait(vif.pll_lock == 1'b1);
-      end
-      begin
-        #(cfg.cal_timeout_us * 1us);
-      end
-    join_any
-    disable fork;
-
-    if (vif.pll_lock) begin
-      env.regmodel.read_csr("pll_config", "vco_trim", final_trim, null);
-      `uvm_info("PLL_CAL", $sformatf("  From MAX (15): final=%0d, time=%0.3f us",
-                                      final_trim, ($realtime - t0)/1000.0), UVM_LOW)
-    end else begin
-      `uvm_error("PLL_CAL", "  FAILED to calibrate from trim=15")
-    end
-
-    `uvm_info("PLL_CAL", "Test 3 PASS: Extreme starting points handled correctly", UVM_LOW)
+    #(2us);
+    if (vif.pll_cal_done)
+      `uvm_error("PLL_CAL", "cal_done still set during PLL_RST")
 
     phase.drop_objection(this);
   endtask : run_phase
