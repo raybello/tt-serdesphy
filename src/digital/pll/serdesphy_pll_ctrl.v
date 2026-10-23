@@ -183,7 +183,7 @@ module serdesphy_pll_ctrl (
     always @(posedge clk_ref_24m or negedge rst_n) begin
         if (!rst_n) begin
             cal_state     <= CAL_IDLE;
-            vco_trim_cal  <= 4'h8;  // Start at mid-range
+            vco_trim_cal  <= 4'h8;  // Default on reset
             search_min    <= 4'h0;
             search_max    <= 4'hF;
             cal_timer     <= 16'd0;
@@ -193,7 +193,9 @@ module serdesphy_pll_ctrl (
             case (cal_state)
                 CAL_IDLE: begin
                     if (cal_enable && phy_en && !cal_done_reg) begin
-                        // Start calibration
+                        // Start calibration from current CSR value (allows random starting point)
+                        // Use CSR value as initial guess for binary search
+                        vco_trim_cal  <= csr_vco_trim;
                         cal_state     <= CAL_INIT;
                         search_min    <= 4'h0;
                         search_max    <= 4'hF;
