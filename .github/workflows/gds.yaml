@@ -123,6 +123,13 @@ jobs:
       - name: Add Verilator to PATH
         run: echo "/opt/verilator/bin" >> "$GITHUB_PATH"
 
+      # The cached Verilator build was configured with ccache available, so
+      # its generated makefile invokes `ccache g++`. The "Build Verilator"
+      # step above only installs ccache on a cache miss, so install it
+      # unconditionally here as well.
+      - name: Install ccache
+        run: sudo apt-get install -y ccache
+
       # Verilator's randomize() on constrained classes (the clk/reset
       # configs) shells out to an SMT solver; without one, randomize()
       # fails at time 0. Kept outside the Verilator build step so it also
