@@ -87,8 +87,8 @@ async def power_up_with_configuration(dut):
         RegisterMap.PHY_ENABLE: 0x01,   # PHY_EN=1, ISO_EN=0
         RegisterMap.TX_CONFIG:  0x01,   # TX_EN only
         RegisterMap.RX_CONFIG:  0x01,   # RX_EN only
-        RegisterMap.PLL_CONFIG: 0x08,   # vco_trim=8, rst=0  (configure_pll bit layout)
-        RegisterMap.CDR_CONFIG: 0x04,   # gain=4, rst=0  (configure_cdr bit layout)
+        RegisterMap.PLL_CONFIG: 0x28,   # bypass=0, rst=0, cp_current=2, vco_trim=8
+        RegisterMap.CDR_CONFIG: 0x04,   # rst=0, fast_lock=0, gain=4
     }
 
     for reg, exp in expected.items():

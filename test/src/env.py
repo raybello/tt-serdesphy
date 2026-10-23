@@ -288,14 +288,25 @@ class PHYController:
         value = (tx_sel << 0) | (rx_sel << 1)
         await self.i2c.write_register(RegisterMap.DATA_SELECT, value)
     
-    async def configure_pll(self, reset=False, vco_trim=8):
-        """Configure PLL"""
-        value = (reset << 7) | (vco_trim & 0x0F)
+    async def configure_pll(self, reset=False, vco_trim=8, cp_current=2, bypass=False):
+        """Configure PLL
+        PLL_CONFIG register bits:
+        - Bit 7: pll_bypass
+        - Bit 6: pll_rst
+        - Bits 5:4: cp_current (charge pump current)
+        - Bits 3:0: vco_trim
+        """
+        value = (bypass << 7) | (reset << 6) | ((cp_current & 0x3) << 4) | (vco_trim & 0x0F)
         await self.i2c.write_register(RegisterMap.PLL_CONFIG, value)
-    
-    async def configure_cdr(self, reset=False, gain=4):
-        """Configure CDR"""
-        value = (reset << 7) | (gain & 0x0F)
+
+    async def configure_cdr(self, reset=False, gain=4, fast_lock=False):
+        """Configure CDR
+        CDR_CONFIG register bits:
+        - Bit 4: cdr_rst
+        - Bit 3: cdr_fast_lock
+        - Bits 2:0: cdr_gain
+        """
+        value = (reset << 4) | (fast_lock << 3) | (gain & 0x7)
         await self.i2c.write_register(RegisterMap.CDR_CONFIG, value)
     
     async def read_status(self):
