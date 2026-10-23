@@ -37,7 +37,9 @@ module serdesphy_ana_pll_loop_filter (
             vco_control_reg <= 8'h80;  // Reset to mid-scale
             integrate_reg <= 8'h80;
             if (last_vco_control != 8'h80) begin
+`ifndef SYNTHESIS
                 $display("[LPF] @ %0.3f us: RESET to 0x80 (enable=0)", $realtime/1000000.0);
+`endif
                 last_vco_control <= 8'h80;
             end
         end else begin
@@ -57,8 +59,10 @@ module serdesphy_ana_pll_loop_filter (
             if ((vco_control_reg > last_vco_control + 4) ||
                 (vco_control_reg + 4 < last_vco_control) ||
                 (vco_control_reg == 8'h00) || (vco_control_reg == 8'hFF)) begin
+`ifndef SYNTHESIS
                 $display("[LPF] @ %0.3f us: vco_control=0x%0h (%0d) integrate=0x%0h charge=%0d",
                          $realtime/1000000.0, vco_control_reg, vco_control_reg, integrate_reg, charge_in);
+`endif
                 last_vco_control <= vco_control_reg;
             end
         end

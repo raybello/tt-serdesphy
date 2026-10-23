@@ -54,8 +54,10 @@ module serdesphy_ana_pll_charge_pump (
 
             // Print debug after 100 cycles
             if ((up_count + down_count >= 100) && !debug_printed) begin
+`ifndef SYNTHESIS
                 $display("[CP] @ %0.3f us: UP=%0d DOWN=%0d (after 100 pulses)",
                          $realtime/1000000.0, up_count, down_count);
+`endif
                 debug_printed <= 1'b1;
             end
         end

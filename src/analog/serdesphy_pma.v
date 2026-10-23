@@ -92,6 +92,7 @@ module serdesphy_pma #(
     wire analog_en;
     assign analog_en = analog_iso_n && analog_reset_n;
 
+`ifndef SYNTHESIS
     // Debug PLL enable signals
     initial begin
         forever begin
@@ -101,6 +102,7 @@ module serdesphy_pma #(
                      pll_enable && analog_en && !pll_bypass_en);
         end
     end
+`endif
 
     // PLL signals
     wire       pll_clk_240m;

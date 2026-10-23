@@ -87,8 +87,6 @@ module serdesphy_ana_pll_vco (
             #(current_half_period_ns * 1ns);
             if (enable && rst_n)  // Check again after delay
                 vco_out = ~vco_out;
-            else
-                break;
         end
 
         if (!enable || !rst_n)
