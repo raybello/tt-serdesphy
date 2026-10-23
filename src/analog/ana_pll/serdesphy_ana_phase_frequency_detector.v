@@ -18,6 +18,8 @@ module serdesphy_ana_phase_frequency_detector (
     output wire       down_pulse      // DOWN pulse for charge pump
 );
 
+`ifndef SYNTHESIS
+    // Simulation-only behavioral PFD
     // Classical PFD with D flip-flops
     // When ref leads feedback: up_pulse is wider than down_pulse
     // When feedback leads ref: down_pulse is wider than up_pulse
@@ -53,5 +55,11 @@ module serdesphy_ana_phase_frequency_detector (
     // Output assignments
     assign up_pulse = up_ff && enable;
     assign down_pulse = down_ff && enable;
+
+`else
+    // Synthesis placeholder - replaced by analog PFD in silicon
+    assign up_pulse = 1'b0;
+    assign down_pulse = 1'b0;
+`endif
 
 endmodule
